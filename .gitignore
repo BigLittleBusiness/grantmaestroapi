@@ -1,0 +1,5 @@
+node_modules
+config/config.env
+package-lock.json
+config/dbConnection.json
+uploads

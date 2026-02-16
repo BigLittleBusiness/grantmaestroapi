@@ -1,0 +1,75 @@
+doctype html
+html
+  head
+    meta(charset="UTF-8")
+    title Welcome to Grant Maestro
+    style.
+      body {
+        font-family: 'Arial', sans-serif;
+        background-color: #f4f4f4;
+        padding: 30px;
+        text-align: center;
+      }
+      .container {
+        max-width: 600px;
+        margin: auto;
+        background: #ffffff;
+        padding: 25px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      }
+      h1 {
+        color: #333;
+        font-size: 24px;
+        margin-bottom: 15px;
+      }
+      p {
+        font-size: 16px;
+        color: #555;
+        line-height: 1.6;
+      }
+      .button {
+        display: inline-block;
+        padding: 12px 25px;
+        background-color: #007bff;
+        color: white;
+        text-decoration: none;
+        font-weight: bold;
+        border-radius: 6px;
+        margin-top: 20px;
+        transition: 0.3s;
+      }
+      .button:hover {
+        background-color: #0056b3;
+      }
+      .logo {
+        text-align: center;
+        margin-top: 30px;
+      }
+      .footer {
+        margin-top: 20px;
+        font-size: 14px;
+        color: #777;
+      }
+  body
+    .container
+      h1 Hello, #{assignedTo}! 🎉
+      p Task Details:
+      p **Description:** #{task_description}
+      p **Status:** #{task_status}
+      p **Completion Date:** #{targeted_completion_date}
+      p If you have any questions, feel free to reach out to us at 
+        a(href="https://GrantMaestro.com") GrantMaestro.com
+      
+      // Call to action button
+      a.button(href={taskLink}) View Task Details
+
+      // "Thanks" message
+      .footer
+        p Best regards,  
+        p **The Grant Maestro Team**
+
+      // Add logo here
+      .logo
+        img(src="https://grantmaestro.com/static/media/color_logo.78f59280492b09b46c32.png" alt="Grant Maestro Logo" width="150")
+

@@ -1,0 +1,17 @@
+INSERT INTO `grant_masterdata` (`masterdata_id`, `masterdata_type`, `name`, `is_blocked`, `is_deleted`,`created_at`,`modified_at`,`deleted_at`) VALUES
+(1, 1, 'Economic Development Manager',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(2, 1, 'Community Development Manager',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(3, 1, 'Grant Officer',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(4, 1, 'Grant Manager',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(5, 1, 'Grant Writer',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(6, 1, 'Grant Coordinator',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(7, 1, 'Manager, Community and Place',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(8, 1, 'Strategic Grants Manager',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(9, 1, 'Manager, Community Building',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(10, 1, 'Project Officer',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(11, 1, 'Program Officer',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(12, 1, 'Research Analyst',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(13, 1, 'Finance Officer',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(14, 1, 'Compliance Officer',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(15, 1, 'CEO',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL),
+(16, 1, 'Board Member',0,0,'2025-01-29 16:36:57', '2025-01-29 16:36:57',NULL);
