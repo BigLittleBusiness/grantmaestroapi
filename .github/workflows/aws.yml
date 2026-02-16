@@ -17,8 +17,9 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            mkdir -p /var/www/grantmaestroapi
             cd /var/www/grantmaestroapi
-            git pull origin main
-            npm install --production
+            git clone https://github.com/BigLittleBusiness/grantmaestroapi.git . || git pull origin main
+            npm install --omit=dev
             # Update .env with DB secrets if needed
-            pm2 restart all || pm2 start ./src/index.js --name "backend"
+            pm2 restart all || pm2 start src/index.js --name "grantmaestro-api"
