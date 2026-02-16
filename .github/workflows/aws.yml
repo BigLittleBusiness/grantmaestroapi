@@ -17,8 +17,8 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /var/www/your-app-directory
+            cd /var/www/grantmaestroapi
             git pull origin main
             npm install --production
             # Update .env with DB secrets if needed
-            pm2 restart all || pm2 start index.js --name "backend"
+            pm2 restart all || pm2 start ./src/index.js --name "backend"
