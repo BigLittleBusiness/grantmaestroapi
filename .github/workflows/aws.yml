@@ -18,6 +18,8 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             mkdir -p /var/www/grantmaestroapi
+            sudo chown -R ubuntu:ubuntu /var/www/grantmaestroapi
+            rm -rf /home/ubuntu/node_modules /home/ubuntu/package-lock.json
             cd /var/www/grantmaestroapi
             git clone https://github.com/BigLittleBusiness/grantmaestroapi.git . || git pull origin main
             npm install --omit=dev
