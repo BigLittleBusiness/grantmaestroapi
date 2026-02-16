@@ -18,7 +18,6 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             sudo mkdir -p /var/www/grantmaestroapi
-            sudo chown -R ubuntu:ubuntu /var/www/grantmaestroapi            
             cd /var/www/grantmaestroapi
             git pull origin main
             npm install --omit=dev
