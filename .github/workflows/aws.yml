@@ -16,8 +16,9 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          script: |            
+          script: |         
+            sudo chown -R ubuntu:ubuntu /var/www/grantmaestroapi
             cd /var/www/grantmaestroapi
             git pull origin main
-            npm install            
+            sudo npm install            
             pm2 restart all || pm2 start src/index.js --name "grantmaestro-api"
