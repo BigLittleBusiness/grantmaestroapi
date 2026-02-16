@@ -18,10 +18,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             sudo mkdir -p /var/www/grantmaestroapi
-            sudo chown -R ubuntu:ubuntu /var/www/grantmaestroapi
-            rm -rf /home/ubuntu/node_modules /home/ubuntu/package-lock.json
+            sudo chown -R ubuntu:ubuntu /var/www/grantmaestroapi            
             cd /var/www/grantmaestroapi
-            git clone https://github.com/BigLittleBusiness/grantmaestroapi.git . || git pull origin main
+            git pull origin main
             npm install --omit=dev
             # Update .env with DB secrets if needed
             pm2 restart all || pm2 start src/index.js --name "grantmaestro-api"
