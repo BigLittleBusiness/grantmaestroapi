@@ -17,7 +17,7 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            mkdir -p /var/www/grantmaestroapi
+            sudo mkdir -p /var/www/grantmaestroapi
             sudo chown -R ubuntu:ubuntu /var/www/grantmaestroapi
             rm -rf /home/ubuntu/node_modules /home/ubuntu/package-lock.json
             cd /var/www/grantmaestroapi
