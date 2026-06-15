@@ -27,12 +27,25 @@ app.use(
 )
 app.use(express.urlencoded({ extended: true }))
 
+// CORS origins are loaded from CORS_ORIGINS in config.env (comma-separated).
+// Example: CORS_ORIGINS=http://localhost:3000,https://grantmaestro.com
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean)
+
 const corsOptions = {
-  origin: ['http://localhost:3000', 'https://grantmaestro.com'], // ✅ Allow requests from both localhost & live domain
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. mobile apps, curl, Postman)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true)
+    } else {
+      callback(new Error(`CORS: origin '${origin}' is not allowed`))
+    }
+  },
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization','stripe-signature'],
-  // allowedHeaders: '*',
-  credentials: true, // ✅ Enables cookie-based authentication
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
 }
 app.use(cookieParser())
 app.use(cors(corsOptions))
