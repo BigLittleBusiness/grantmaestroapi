@@ -1,5 +1,6 @@
 import asyncHandler from '../middlewares/async.js'
 import base from '../models/base.js'
+import { fileVaultUrl } from '../utils/s3UrlHelper.js'
 
 const {
   Op,
@@ -394,7 +395,6 @@ export const manageGrantReport = asyncHandler(async (req, res, next) => {
     report_template_received,
     grant_id,
   } = req.body
-  const imagePath = req.protocol + '://' + req.get('host') + '/uploads/'
   const reportObj = {
     report_title,
     report_submission_date,
@@ -404,8 +404,9 @@ export const manageGrantReport = asyncHandler(async (req, res, next) => {
   }
   if (req.files) {
     if (req.files.report_template_file) {
+      const templateFile = req.files.report_template_file[0]
       reportObj.report_template_file_path =
-        imagePath + 'file_vault/' + req.files.report_template_file[0].filename
+        templateFile.location || fileVaultUrl(templateFile.filename)
     }
   }
   let reportId
@@ -423,9 +424,9 @@ export const manageGrantReport = asyncHandler(async (req, res, next) => {
   }
   if (req.files) {
     if (req.files.report_file) {
-      const reportFilePath = req.files.report_file[0].filename
+      const reportFile = req.files.report_file[0]
       await GrantFiles.create({
-        file_path: imagePath + 'file_vault/' + reportFilePath,
+        file_path: reportFile.location || fileVaultUrl(reportFile.filename),
         organization_grant_id: grant_id,
         related_report_id: reportId,
       })

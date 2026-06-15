@@ -1,7 +1,7 @@
 import asyncHandler from '../middlewares/async.js'
 import base from '../models/base.js'
-
 const { Organization, SupportTickets } = base
+import { supportTicketFileUrl } from '../utils/s3UrlHelper.js'
 
 /**
  * @description Fetch the list of support tickets
@@ -157,14 +157,11 @@ export const manageTicket = asyncHandler(async (req, res, next) => {
       },
     ],
   })
-  const imagePath = req.protocol + '://' + req.get('host') + '/uploads/'
   const ticketDetail = {}
   ticketDetail.ticket_id = ticketInfo.ticket_id
   ticketDetail.ticket_title = ticketInfo.ticket_title
   ticketDetail.ticket_description = ticketInfo.ticket_description
-  ticketDetail.ticket_file_path = ticketInfo.ticket_file_path
-    ? imagePath + 'support_ticket/' + ticketInfo.ticket_file_path
-    : ''
+  ticketDetail.ticket_file_path = supportTicketFileUrl(ticketInfo.ticket_file_path)
   ticketDetail.ticket_status = ticketInfo.ticket_status
   ticketDetail.organization_id = ticketInfo.organization_id
   ticketDetail.organization_name =

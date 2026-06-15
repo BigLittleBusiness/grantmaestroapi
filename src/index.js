@@ -16,7 +16,7 @@ dotenv.config({ path: './config/config.env' })
 
 const app = express()
 app.enable('trust proxy')
-app.use('/uploads', express.static('uploads'))
+// Files are now served from Amazon S3 — local /uploads static middleware removed.
 
 app.use(
   express.json({

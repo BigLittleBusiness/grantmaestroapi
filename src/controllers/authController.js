@@ -7,6 +7,7 @@ import randomstring from 'randomstring'
 import moment from 'moment'
 import CommonHelper from '../utils/commonHelper.js'
 import sendEmail from '../utils/mailHelper.js'
+import { profileImageUrl } from '../utils/s3UrlHelper.js'
 
 const { User, UserRole, Organization, MasterData, Country, SubscriptionPlans } =
   base
@@ -174,8 +175,6 @@ export const login = asyncHandler(async (req, res, next) => {
   //     },
   //   }
   // )
-  const imagePath = req.protocol + '://' + req.get('host') + '/uploads/'
-
   let userDetails = {}
   userDetails.user_id = user.user_id
   userDetails.first_name = user.first_name
@@ -192,9 +191,7 @@ export const login = asyncHandler(async (req, res, next) => {
   userDetails.organization_website = user.organization.organization_website
   userDetails.position_id = user.position ? user.position.masterdata_id : 0
   userDetails.position = user.position ? user.position.name : ''
-  userDetails.profile_image = user.profile_image
-    ? imagePath + 'profile_image/' + user.profile_image
-    : ''
+  userDetails.profile_image = profileImageUrl(user.profile_image)
   userDetails.user_role_id = user.user_role ? user.user_role.role_id : ''
   userDetails.user_role = user.user_role ? user.user_role.name : ''
   userDetails.preferred_subscription_plan_id =
@@ -516,8 +513,6 @@ export const viewProfile = asyncHandler(async (req, res, next) => {
     ],
     required: false,
   })
-  const imagePath = req.protocol + '://' + req.get('host') + '/uploads/'
-
   let userDetails = {}
   userDetails.user_id = userInfo.user_id
   userDetails.email = userInfo.email
@@ -539,9 +534,7 @@ export const viewProfile = asyncHandler(async (req, res, next) => {
   userDetails.country_name = userInfo.country
     ? userInfo.country.country_name
     : ''
-  userDetails.profile_image = userInfo.profile_image
-    ? imagePath + 'profile_image/' + userInfo.profile_image
-    : ''
+  userDetails.profile_image = profileImageUrl(userInfo.profile_image)
   userDetails.has_profile_updated = userInfo.has_profile_updated
   userDetails.user_role_id = userInfo.user_role
     ? userInfo.user_role.role_id
@@ -646,7 +639,6 @@ export const updateProfile = asyncHandler(async (req, res, next) => {
     ],
     required: false,
   })
-  const imagePath = req.protocol + '://' + req.get('host') + '/uploads/'
   let userDetails = {}
   userDetails.user_id = userInfo.user_id
   userDetails.email = userInfo.email
@@ -668,9 +660,7 @@ export const updateProfile = asyncHandler(async (req, res, next) => {
   userDetails.country_name = userInfo.country
     ? userInfo.country.country_name
     : ''
-  userDetails.profile_image = userInfo.profile_image
-    ? imagePath + 'profile_image/' + userInfo.profile_image
-    : ''
+  userDetails.profile_image = profileImageUrl(userInfo.profile_image)
   userDetails.has_profile_updated = userInfo.has_profile_updated
   res.send({
     success: true,

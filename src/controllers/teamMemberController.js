@@ -3,6 +3,7 @@ import CommonHelper from '../utils/commonHelper.js'
 import base from '../models/base.js'
 const { Op, User, UserRole, MasterData, Grant, Task } = base
 import sendEmail from '../utils/mailHelper.js'
+import { profileImageUrl } from '../utils/s3UrlHelper.js'
 
 /**
  * @description Add a new team member
@@ -96,19 +97,16 @@ export const addTeamMember = asyncHandler(async (req, res, next) => {
     required: false,
     order: [['user_id', 'DESC']],
   })
-  const imagePath = req.protocol + '://' + req.get('host') + '/uploads/'
   const memberDetails = {
     user_id: memberInfo.user_id,
     email: memberInfo.email,
-    full_name: memberInfo.first_name + ' ' + memberInfo.last_name,
+    full_name: CommonHelper.formatFullName(memberInfo.first_name, memberInfo.middle_name, memberInfo.last_name),
     address: memberInfo.address,
     position: memberInfo.position ? memberInfo.position.name : '',
     position_text: memberInfo.position_text ? memberInfo.position_text : '',
     user_role_id: memberInfo.user_role.role_id,
     user_type: memberInfo.user_role.name,
-    profile_image: memberInfo.profile_image
-      ? imagePath + 'profile_image/' + memberInfo.profile_image
-      : '',
+    profile_image: profileImageUrl(memberInfo.profile_image),
     rate: 55,
   }
 
@@ -248,7 +246,6 @@ export const fetchMemberList = asyncHandler(async (req, res, next) => {
     required: false,
     order: [['user_id', 'DESC']],
   })
-  const imagePath = req.protocol + '://' + req.get('host') + '/uploads/'
   const memberList = userList.map((el) => {
     return {
       user_id: el.user_id,
@@ -259,9 +256,7 @@ export const fetchMemberList = asyncHandler(async (req, res, next) => {
       position_text: el.position_text ? el.position_text : '',
       user_role_id: el.user_role.role_id,
       user_type: el.user_role.name,
-      profile_image: el.profile_image
-        ? imagePath + 'profile_image/' + el.profile_image
-        : '',
+      profile_image: profileImageUrl(el.profile_image),
       rate: 55,
       subscription_status: el.subscription_status,
       subscription_status_display_text: (el.subscription_status === false) ? 'Inactive' : 'Active'
