@@ -209,6 +209,16 @@ export const login = asyncHandler(async (req, res, next) => {
     expiresIn: '7d',
   })
 
+  // Persist the refresh token in the database so it can be validated and
+  // invalidated server-side (prevents token reuse after logout or rotation).
+  await User.update(
+    {
+      refresh_token: refreshToken,
+      is_valid_refresh_token: true,
+    },
+    { where: { user_id: user.user_id } }
+  )
+
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: true,
@@ -694,9 +704,25 @@ export const subscriptionExpiryDate = asyncHandler(async (req, res) => {
  * @returns {Object} Response with status and success message
  */
 export const logout = asyncHandler(async (req, res) => {
-  res.clearCookie('authToken')
-  res.clearCookie('refreshToken')
-  res.json({ message: 'Logged out successfully!' })
+  const refreshToken = req.cookies.refreshToken
+
+  // Invalidate the refresh token in the database so it cannot be reused
+  // even if someone still holds the cookie value.
+  if (refreshToken) {
+    try {
+      const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET)
+      await User.update(
+        { refresh_token: null, is_valid_refresh_token: false },
+        { where: { user_id: decoded.id } }
+      )
+    } catch (_err) {
+      // Token may already be expired — still clear cookies below.
+    }
+  }
+
+  res.clearCookie('accessToken', { httpOnly: true, secure: true, sameSite: 'None' })
+  res.clearCookie('refreshToken', { httpOnly: true, secure: true, sameSite: 'None' })
+  res.json({ success: true, message: 'Logged out successfully' })
 })
 
 export const refreshTokenValidation = asyncHandler(async (req, res) => {
@@ -704,22 +730,39 @@ export const refreshTokenValidation = asyncHandler(async (req, res) => {
   if (!refreshToken) return res.status(401).json({ message: 'Unauthorized' })
 
   try {
+    // Verify the JWT signature and expiry first.
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET)
+
+    // Validate the token against the database to prevent reuse after logout
+    // or after a token rotation has occurred.
+    const user = await User.findOne({
+      where: {
+        user_id: decoded.id,
+        refresh_token: refreshToken,
+        is_valid_refresh_token: true,
+        is_deleted: 0,
+      },
+    })
+    if (!user) {
+      return res.status(403).json({ message: 'Invalid or revoked refresh token' })
+    }
+
+    // Issue a new access token carrying the same user id used throughout the app.
     const newAccessToken = jwt.sign(
-      { username: decoded.username },
+      { id: decoded.id },
       process.env.JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '30m' }
     )
 
     res.cookie('accessToken', newAccessToken, {
       httpOnly: true,
       secure: true,
-      sameSite: 'Strict',
-      maxAge: 15 * 60 * 1000,
+      sameSite: 'None',
+      maxAge: 30 * 60 * 1000,
     })
-    res.json({ accessToken: newAccessToken })
+    res.json({ success: true, message: 'Access token refreshed successfully' })
   } catch (error) {
-    res.status(403).json({ message: 'Invalid refresh token' })
+    res.status(403).json({ message: 'Invalid or expired refresh token' })
   }
 })
 
