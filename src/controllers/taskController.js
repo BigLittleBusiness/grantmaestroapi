@@ -1,4 +1,5 @@
 import asyncHandler from '../middlewares/async.js'
+import CommonHelper from '../utils/commonHelper.js'
 import base from '../models/base.js'
 import sendEmail from '../utils/mailHelper.js'
 const { User, Grant, Task } = base
@@ -260,21 +261,21 @@ export const fetchTaskList = asyncHandler(async (req, res, next) => {
       task_assigned_to_id: el.task_assigned_to,
       targeted_completion_date: el.targeted_completion_date,
       task_assigned_to_name: el.assigned_member
-        ? el.assigned_member.first_name +
-          ' ' +
-          el.assigned_member.middle_name +
-          ' ' +
-          el.assigned_member.last_name
+        ? CommonHelper.formatFullName(
+            el.assigned_member.first_name,
+            el.assigned_member.middle_name,
+            el.assigned_member.last_name
+          )
         : '',
       grant_id: el.organization_grant_id,
       grant: el.grant.grant_title,
       assignedTo: el.assigned_member
-        ? el.assigned_member.first_name +
-          ' ' +
-          el.assigned_member.middle_name +
-          ' ' +
-          el.assigned_member.last_name
-        : '',
+        ? CommonHelper.formatFullName(
+            el.assigned_member.first_name,
+            el.assigned_member.middle_name,
+            el.assigned_member.last_name
+          )
+        : ''
     }
   })
   res.send({
@@ -332,11 +333,11 @@ export const getTaskDetails = asyncHandler(async (req, res, next) => {
     (task.task_start_date = taskdata.task_start_date),
     (task.task_assigned_to_id = taskdata.task_assigned_to),
     (task.task_assigned_to_name = taskdata.assigned_member
-      ? taskdata.assigned_member.first_name +
-        ' ' +
-        taskdata.assigned_member.middle_name +
-        ' ' +
-        taskdata.assigned_member.last_name
+      ? CommonHelper.formatFullName(
+          taskdata.assigned_member.first_name,
+          taskdata.assigned_member.middle_name,
+          taskdata.assigned_member.last_name
+        )
       : ''),
     (task.grant_id = taskdata.organization_grant_id),
     (task.grant = taskdata.grant.grant_title),

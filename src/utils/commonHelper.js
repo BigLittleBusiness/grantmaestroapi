@@ -262,6 +262,22 @@ const removeFile = async (table_field_name="", file_name="") => {
 }
 
 
+/**
+ * Safely formats a full name from first, middle, and last name parts.
+ * Filters out null, undefined, and empty strings so no double spaces appear
+ * when a middle name is absent.
+ *
+ * @param {string|null} firstName
+ * @param {string|null} middleName
+ * @param {string|null} lastName
+ * @returns {string}
+ */
+const formatFullName = (firstName, middleName, lastName) => {
+  return [firstName, middleName, lastName]
+    .filter((part) => part && part.trim() !== '')
+    .join(' ')
+}
+
 const countStringOccurance = async(s1, s2) => {
     let count = 0;
     let pos = 0;
@@ -289,5 +305,6 @@ export default {
     getFileBasePath,
     getFileBaseURL,
     removeFile,
-    countStringOccurance
+    countStringOccurance,
+    formatFullName
 }

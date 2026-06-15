@@ -130,14 +130,13 @@ export default (sequelize, Sequelize) => {
 
       grant_status: {
         type: Sequelize.ENUM(
-          '',
           'applied',
           'pending',
           'inprogress',
           'completed'
         ),
         allowNull: false,
-        defaultValue: '',
+        defaultValue: 'pending',
       },
       is_blocked: { type: Sequelize.BOOLEAN, defaultValue: 0 },
       is_deleted: { type: Sequelize.BOOLEAN, defaultValue: 0 },

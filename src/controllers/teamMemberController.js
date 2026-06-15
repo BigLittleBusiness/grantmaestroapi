@@ -1,7 +1,7 @@
 import asyncHandler from '../middlewares/async.js'
+import CommonHelper from '../utils/commonHelper.js'
 import base from '../models/base.js'
 const { Op, User, UserRole, MasterData, Grant, Task } = base
-import CommonHelper from '../utils/commonHelper.js'
 import sendEmail from '../utils/mailHelper.js'
 
 /**
@@ -253,7 +253,7 @@ export const fetchMemberList = asyncHandler(async (req, res, next) => {
     return {
       user_id: el.user_id,
       email: el.email,
-      full_name: el.first_name + ' ' + el.middle_name + ' ' + el.last_name,
+      full_name: CommonHelper.formatFullName(el.first_name, el.middle_name, el.last_name),
       address: el.address,
       position: el.position ? el.position.name : '',
       position_text: el.position_text ? el.position_text : '',
