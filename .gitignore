@@ -1,5 +1,33 @@
-node_modules
-config/config.env
+# Dependencies
+node_modules/
 package-lock.json
+yarn.lock
+
+# Environment variables
+config/config.env
+.env
+.env.*
+!.env.example
+
+# Database configs
 config/dbConnection.json
-uploads
+config/dbConnection copy.json
+
+# File uploads (legacy local storage)
+uploads/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

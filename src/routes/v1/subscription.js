@@ -4,8 +4,10 @@ import {
   createSubscriptionPlan,
   fetchSubscriptionPlans,
 } from '../../controllers/subscriptionController.js'
-import { createCheckoutSession } from '../../controllers/paymentController.js'
-
+import {
+  createPinCharge,
+  pinWebhook,
+} from '../../controllers/pinPaymentController.js'
 import { subscriptionExpiryDate } from '../../controllers/authController.js'
 
 const subscriptionRouter = express.Router()
@@ -55,11 +57,27 @@ subscriptionRouter.post(
  *       200:
  *         description: Checkout session created successfully.
  */
-subscriptionRouter.post(
-  '/create-checkout-session',
-  protect,
-  createCheckoutSession
-)
+/**
+ * @swagger
+ * /v1/subscription/create-charge:
+ *   post:
+ *     summary: Create a Pin Payments charge and activate subscription.
+ *     tags:
+ *       - Subscription
+ *     security:
+ *       - bearerAuth: []
+ */
+subscriptionRouter.post('/create-charge', protect, createPinCharge)
+
+/**
+ * @swagger
+ * /v1/subscription/pin-webhook:
+ *   post:
+ *     summary: Receive Pin Payments webhook events.
+ *     tags:
+ *       - Subscription
+ */
+subscriptionRouter.post('/pin-webhook', pinWebhook)
 
 /**
  * @swagger

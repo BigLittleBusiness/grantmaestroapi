@@ -7,6 +7,7 @@ import subscriptionRouter from './subscription.js'
 import teamMemberRouter from './teamMember.js'
 import ticketRouter from './ticket.js'
 import authRouter from './auth.js'
+import adminRouter from './admin.js'
 
 const router = express.Router()
 
@@ -73,5 +74,13 @@ router.use('/ticket', ticketRouter)
  *   description: API for Auth data
  */
 router.use('/auth', authRouter)
+
+/**
+ * @swagger
+ * tags:
+ *   name: Admin
+ *   description: System administration endpoints (Super Admin only)
+ */
+router.use('/admin', adminRouter)
 
 export default router

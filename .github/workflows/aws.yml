@@ -1,4 +1,5 @@
-name: Deploy Backend
+name: Deploy Backend API to EC2
+
 on:
   push:
     branches: [ main ]
@@ -16,9 +17,19 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          script: |         
-            sudo chown -R ubuntu:ubuntu /var/www/grantmaestroapi
+          script: |
+            # Ensure directory exists and has correct permissions
+            sudo mkdir -p /var/www/grantmaestroapi
+            sudo chown -R ${{ secrets.EC2_USERNAME }}:${{ secrets.EC2_USERNAME }} /var/www/grantmaestroapi
+            
             cd /var/www/grantmaestroapi
+            
+            # Pull latest code
             git pull origin main
-            sudo npm install            
-            pm2 restart all || pm2 start src/index.js --name "grantmaestro-api"
+            
+            # Install dependencies (without sudo to avoid permission issues)
+            npm install --production
+            
+            # Restart PM2 process
+            pm2 restart grantmaestro-api || pm2 start src/index.js --name "grantmaestro-api"
+            pm2 save

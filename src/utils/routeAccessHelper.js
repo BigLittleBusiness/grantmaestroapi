@@ -38,7 +38,11 @@ const routePathAccessUserTypes = {
   'manage-grant-category': [1],
   'calendar-events': [1, 2, 3, 4],
   'grant-category-list': [1, 2, 3, 4],
-  'organization-list':[1],
+  'organization-list': [1],
+  // Pin Payments System Admin settings
+  'pin-settings': [1],
+  // Subscription charge (all authenticated users) and webhook (public, no auth)
+  'create-charge': [1, 2, 3, 4],
   'logout': [1, 2, 3, 4],
 }
 
