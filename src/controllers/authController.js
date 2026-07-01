@@ -160,7 +160,6 @@ export const login = asyncHandler(async (req, res, next) => {
         'your subscription has expired, please contact your administrator',
     })
   }
-  console.log('user', user.user_id)
   //update user details
   // await User.update(
   //   {
@@ -245,7 +244,6 @@ export const login = asyncHandler(async (req, res, next) => {
  */
 export const generateAccessToken = asyncHandler(async (req, res, next) => {
   const cookies = req.cookies
-  console.log(cookies)
   if (!cookies?.jwt)
     return res.status(401).json({
       success: false,
@@ -257,13 +255,13 @@ export const generateAccessToken = asyncHandler(async (req, res, next) => {
     where: { user_id: decoded.id, refresh_token: refreshToken },
   })
   if (!user) {
-    return res.status(200).json({
+    return res.status(401).json({
       success: false,
       message: 'Invalid refresh token',
     })
   }
   if (user.is_valid_refresh_token === false) {
-    return res.status(200).json({
+    return res.status(401).json({
       success: false,
       message: 'Invalid refresh token',
     })
@@ -377,8 +375,6 @@ export const resetPassword = asyncHandler(async (req, res, next) => {
   const { identity, salt, password } = req.body
   let email = CommonHelper.decrypt(identity)
   let code = CommonHelper.decrypt(salt)
-  console.log(email)
-  console.log('code', code)
   const user = await User.findOne({
     where: { email: email, reset_password_otp: code },
     attributes: ['user_id', 'first_name', 'email', 'phone_no'],

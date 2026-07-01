@@ -8,6 +8,7 @@ import teamMemberRouter from './teamMember.js'
 import ticketRouter from './ticket.js'
 import authRouter from './auth.js'
 import adminRouter from './admin.js'
+import aiRouter from './ai.js'
 
 const router = express.Router()
 
@@ -82,5 +83,13 @@ router.use('/auth', authRouter)
  *   description: System administration endpoints (Super Admin only)
  */
 router.use('/admin', adminRouter)
+
+/**
+ * @swagger
+ * tags:
+ *   name: AI
+ *   description: AI-powered grant assistance endpoints
+ */
+router.use('/ai', aiRouter)
 
 export default router

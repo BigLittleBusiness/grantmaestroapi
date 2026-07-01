@@ -19,12 +19,14 @@ export const assignTask = asyncHandler(async (req, res, next) => {
     task_description,
     task_assigned_to,
     targeted_completion_date,
+    task_priority,
   } = req.body
   const taskObj = {
     task_description,
     task_assigned_to,
     targeted_completion_date: new Date(targeted_completion_date),
     organization_grant_id: grant_id,
+    task_priority: task_priority || null,
   }
   const taskData = await Task.create(taskObj)
   const taskInfo = await Task.findOne({
@@ -69,6 +71,7 @@ export const assignTask = asyncHandler(async (req, res, next) => {
         id: taskInfo.task_id,
         description: taskInfo.task_description,
         status: taskInfo.task_status,
+        priority: taskInfo.task_priority,
         task_assigned_to_id: taskInfo.task_assigned_to,
         grant_id: taskInfo.organization_grant_id,
         assignedTo: assignedTo,
@@ -99,6 +102,7 @@ export const updateTask = asyncHandler(async (req, res, next) => {
     task_assigned_to,
     targeted_completion_date,
     grant_id,
+    task_priority,
   } = req.body
 
   await Task.update(
@@ -106,6 +110,7 @@ export const updateTask = asyncHandler(async (req, res, next) => {
       task_description,
       task_status,
       task_assigned_to,
+      task_priority: task_priority !== undefined ? task_priority : null,
       task_start_date: new Date(),
       targeted_completion_date: new Date(targeted_completion_date),
       task_completion_date: new Date(),
@@ -159,6 +164,7 @@ export const updateTask = asyncHandler(async (req, res, next) => {
         id: taskInfo.task_id,
         description: taskInfo.task_description,
         status: taskInfo.task_status,
+        priority: taskInfo.task_priority,
         task_assigned_to_id: taskInfo.task_assigned_to,
         grant_id: taskInfo.organization_grant_id,
         assignedTo: assignedTo,
@@ -214,7 +220,8 @@ export const fetchTaskList = asyncHandler(async (req, res, next) => {
   const organizationId = req.user.organization_id
   const userType = req.user.user_type
 
-  let findCond = { is_blocked: 0, is_deleted: 0 }
+  // is_deleted: 0 is enforced by the Task model's defaultScope
+  let findCond = { is_blocked: 0 }
   if (userType == 3 || userType == 4) {
     findCond.task_assigned_to = userId
   }
@@ -232,6 +239,7 @@ export const fetchTaskList = asyncHandler(async (req, res, next) => {
       'task_id',
       'task_description',
       'task_status',
+      'task_priority',
       'task_assigned_to',
       'organization_grant_id',
       'targeted_completion_date',
@@ -258,6 +266,7 @@ export const fetchTaskList = asyncHandler(async (req, res, next) => {
       id: el.task_id,
       description: el.task_description,
       status: el.task_status,
+      priority: el.task_priority,
       task_assigned_to_id: el.task_assigned_to,
       targeted_completion_date: el.targeted_completion_date,
       task_assigned_to_name: el.assigned_member
@@ -297,13 +306,15 @@ export const fetchTaskList = asyncHandler(async (req, res, next) => {
  */
 export const getTaskDetails = asyncHandler(async (req, res, next) => {
   const taskId = req.params.task_id
-  let findCond = { is_blocked: 0, is_deleted: 0, task_id: taskId }
+  // is_deleted: 0 is enforced by the Task model's defaultScope
+  let findCond = { is_blocked: 0, task_id: taskId }
 
   const taskdata = await Task.findOne({
     attributes: [
       'task_id',
       'task_description',
       'task_status',
+      'task_priority',
       'targeted_completion_date',
       'task_start_date',
       'task_assigned_to',
@@ -329,6 +340,7 @@ export const getTaskDetails = asyncHandler(async (req, res, next) => {
   ;(task.task_id = taskdata.task_id),
     (task.task_description = taskdata.task_description),
     (task.task_status = taskdata.task_status),
+    (task.priority = taskdata.task_priority),
     (task.targeted_completion_date = taskdata.targeted_completion_date),
     (task.task_start_date = taskdata.task_start_date),
     (task.task_assigned_to_id = taskdata.task_assigned_to),

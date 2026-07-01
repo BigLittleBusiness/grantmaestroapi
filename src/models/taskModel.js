@@ -5,6 +5,7 @@ export default (sequelize, Sequelize) => {
             task_id: { type: Sequelize.INTEGER(10).UNSIGNED, autoIncrement: true, allowNull: false, primaryKey: true },
             task_description: { type: Sequelize.TEXT, allowNull: false },
             task_status:{ type: Sequelize.ENUM("assigned","pending", "inprogress", "completed"), allowNull: false, defaultValue:'assigned' },
+            task_priority: { type: Sequelize.ENUM('high', 'medium', 'low'), allowNull: true, defaultValue: null },
             task_assigned_to:{type: Sequelize.INTEGER(10).UNSIGNED, allowNull:true, references: { model:'grant_users', key:'user_id'}},
             task_completion_date: { type: Sequelize.DATEONLY, allowNull: true},
             task_start_date: { type: Sequelize.DATEONLY, allowNull: true},
@@ -24,6 +25,12 @@ export default (sequelize, Sequelize) => {
                     fields: ['task_id']
                 }
             ],
+            defaultScope: {
+                where: { is_deleted: 0 },
+            },
+            scopes: {
+                withDeleted: {},
+            },
             timestamps: false,
             freezeTableName: true
         }

@@ -1,4 +1,6 @@
 import express from 'express'
+import helmet from 'helmet'
+import { rateLimit } from 'express-rate-limit'
 import swaggerUi from 'swagger-ui-express'
 import swaggerJsDoc from 'swagger-jsdoc'
 import dotenv from 'dotenv'
@@ -16,8 +18,36 @@ dotenv.config({ path: './config/config.env' })
 
 const app = express()
 app.enable('trust proxy')
-// Files are now served from Amazon S3 — local /uploads static middleware removed.
 
+// ── Security headers ────────────────────────────────────────────────────────
+app.use(helmet())
+
+// ── Rate limiting ────────────────────────────────────────────────────────────
+// Strict limiter for authentication endpoints (login, signup, password reset)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please try again later.' },
+})
+
+// General API limiter for all other routes
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please try again later.' },
+})
+
+app.use('/v1/auth/login', authLimiter)
+app.use('/v1/auth/signup', authLimiter)
+app.use('/v1/auth/forgot-password', authLimiter)
+app.use('/v1/auth/reset-password', authLimiter)
+app.use('/v1', apiLimiter)
+
+// Files are now served from Amazon S3 — local /uploads static middleware removed.
 app.use(
   express.json({
     verify: (req, res, buf) => {
@@ -88,10 +118,9 @@ const swaggerDocs = swaggerJsDoc(swaggerOptions)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs))
 
 let server = {}
-console.log('MODE:', MODE)
 if (MODE === 'development') {
   server = app.listen(PORT, () => {
-    console.log(`Server is running in ${MODE} mode at port ${PORT}`)
+    console.log(`Server running in ${MODE} mode on port ${PORT}`)
   })
 } else {
   const options = {
@@ -105,7 +134,7 @@ if (MODE === 'development') {
   })
 }
 
-process.on('unhandledRejection', (err, promise) => {
-  console.log(`Error:${err}`)
+process.on('unhandledRejection', (err) => {
+  console.error(`Unhandled rejection: ${err.message || err}`)
   server.close(() => process.exit(1))
 })

@@ -3,7 +3,10 @@ import ErrorResponse from '../utils/errorResponse.js'
 const errorHandler = (err, req, res, next) => {
   let error = { ...err }
   error.message = err.message
-  console.log(error)
+  // Log unexpected server errors to stderr; suppress expected client errors (4xx)
+  if (!error.statusCode || error.statusCode >= 500) {
+    console.error('[GrantMaestro Error]', error.message || error)
+  }
 
   if (err.name === 'CastError') {
     const message = `Resource not found with id ${err.value}`

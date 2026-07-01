@@ -535,7 +535,6 @@ export const manageGrantExpense = asyncHandler(async (req, res, next) => {
     })
     message = 'Grant expense updated successfully.'
   } else {
-    console.log('HELLOW', expenseObj)
     const createdExpense = await GrantItemExpenses.create(expenseObj)
     expenseId = createdExpense.expense_id
   }
@@ -618,7 +617,6 @@ export const grantList = asyncHandler(async (req, res, next) => {
       [Op.in]: grantIds,
     }
   }
-  console.log(req.query)
   if (req.query.grant_title) {
     grantFindCond.grant_title = {
       [Op.like]: `%${req.query.grant_title}%`,
@@ -633,7 +631,6 @@ export const grantList = asyncHandler(async (req, res, next) => {
   }
 
   if (req.query.opening_start && req.query.opening_end) {
-    console.log(req.query.opening_start)
     grantFindCond.opening_date = {
       [Op.gte]: req.query.opening_start,
       [Op.lte]: req.query.opening_end,
@@ -661,7 +658,12 @@ export const grantList = asyncHandler(async (req, res, next) => {
     }
   }
 
-  const grantList = await Grant.findAll({
+  // Optional pagination: ?page=1&limit=50 (defaults to all records when omitted)
+  const page = req.query.page ? parseInt(req.query.page, 10) : null
+  const limit = req.query.limit ? parseInt(req.query.limit, 10) : null
+  const paginationOpts = page && limit ? { limit, offset: (page - 1) * limit } : {}
+
+  const { count: totalCount, rows: grantRows } = await Grant.findAndCountAll({
     where: grantFindCond,
     include: [
       {
@@ -683,9 +685,11 @@ export const grantList = asyncHandler(async (req, res, next) => {
       },
     ],
     order: [['organization_grant_id', 'desc']],
+    distinct: true,
+    ...paginationOpts,
   })
 
-  const grants = grantList.map((el) => {
+  const grants = grantRows.map((el) => {
     return {
       organization_grant_id: el.organization_grant_id,
       category_id: el.category ? el.category.grant_category_id : '',
@@ -734,10 +738,15 @@ export const grantList = asyncHandler(async (req, res, next) => {
       financialNotes: el.latest_financial_note ? el.latest_financial_note : '',
     }
   })
+  const pagination =
+    page && limit
+      ? { page, limit, total: totalCount, pages: Math.ceil(totalCount / limit) }
+      : { total: totalCount }
+
   res.send({
     status: true,
     message: 'Grant list',
-    data: { grants },
+    data: { grants, pagination },
   })
 })
 
