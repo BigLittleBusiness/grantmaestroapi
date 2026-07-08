@@ -4,7 +4,7 @@ const validationError = (res, error) =>
   res.status(422).json({ success: false, message: error.details[0].message })
 
 export const signupValidation = (req, res, next) => {
-  const { email, password, preferred_subscription_plan_id } = req.body
+  const { email, password, preferred_subscription_plan_id, first_name, last_name, organization_name } = req.body
   const { error } = Joi.object({
     email: Joi.string().label('Email').required(),
     password: Joi.string().label('Password').min(8).max(50),
@@ -12,7 +12,10 @@ export const signupValidation = (req, res, next) => {
       .label('Subscription Plan')
       .required()
       .description('Please choose a preferred subscription plan'),
-  }).validate({ email, password, preferred_subscription_plan_id })
+    first_name: Joi.string().label('First Name').max(100).optional().allow(''),
+    last_name: Joi.string().label('Last Name').max(100).optional().allow(''),
+    organization_name: Joi.string().label('Organisation Name').max(200).optional().allow(''),
+  }).validate({ email, password, preferred_subscription_plan_id, first_name, last_name, organization_name })
   if (error) return validationError(res, error)
   next()
 }

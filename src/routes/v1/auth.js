@@ -11,6 +11,7 @@ import {
 } from '../../middlewares/authValidator.js'
 import {
   signup,
+  verifyOtp,
   forgotPassword,
   resetPassword,
   login,
@@ -155,6 +156,29 @@ authRouter.post('/forgot-password', forgotPassValidation, forgotPassword)
  *         description: Email already exists
  */
 authRouter.post('/signup', signupValidation, signup)
+
+/**
+ * @swagger
+ * /v1/auth/verify-otp:
+ *   post:
+ *     summary: Verify account OTP after signup
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Account verified and user logged in
+ */
+authRouter.post('/verify-otp', verifyOtp)
 
 /**
  * @swagger

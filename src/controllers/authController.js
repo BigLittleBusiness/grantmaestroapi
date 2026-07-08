@@ -22,7 +22,7 @@ const { User, UserRole, Organization, MasterData, Country, SubscriptionPlans } =
  * @returns {Object} Response with status and success message
  */
 export const signup = asyncHandler(async (req, res, next) => {
-  const { email, password, preferred_subscription_plan_id } = req.body
+  const { email, password, preferred_subscription_plan_id, first_name, last_name, organization_name } = req.body
   const usr = await User.findOne({ where: { email: email } })
   if (usr) {
     return res.send({
@@ -31,7 +31,7 @@ export const signup = asyncHandler(async (req, res, next) => {
     })
   }
   const orgObj = {
-    organization_name: '',
+    organization_name: organization_name || '',
     abn_no: '',
     email,
     address: '',
@@ -55,34 +55,102 @@ export const signup = asyncHandler(async (req, res, next) => {
   )
   const subscriptionExpiryDate = moment(nextDate).format('YYYY-MM-DD')
   const decodedPass = atob(password)
+
+  // Generate a 4-digit OTP for account verification
+  const otpCode = randomstring.generate({ length: 4, charset: 'numeric' })
+
   const usrObj = {
     email,
     password: decodedPass,
-    first_name: '',
+    first_name: first_name || '',
     middle_name: '',
-    last_name: '',
+    last_name: last_name || '',
     user_type: 2,
     organization_id: Org.organization_id,
     created_at: new Date(),
     modified_at: new Date(),
     preferred_subscription_plan_id,
     subscription_expiry_date: subscriptionExpiryDate,
+    account_verification_otp: otpCode,
+    is_otp_verified: 0,
   }
   await User.create(usrObj)
+
+  // Send OTP verification email
   sendEmail(
     email,
-    'Welcome Mail - Grant Maestro',
-    'welcome',
+    'Verify Your Grant Maestro Account',
+    'verifyAccount',
     {
-      name: email,
+      firstName: first_name || email,
+      otpCode,
+      year: new Date().getFullYear(),
     },
-    null // Attachments (optional)
+    null
   )
 
   res.send({
     status: true,
-    message: 'user account created successfully',
-    data: {},
+    message: 'Account created. Please check your email for your verification code.',
+    data: { email },
+  })
+})
+
+/**
+ * @description Verify account OTP after signup
+ * @route POST /auth/verify-otp
+ * @access Public
+ */
+export const verifyOtp = asyncHandler(async (req, res, next) => {
+  const { email, otp } = req.body
+  const user = await User.findOne({ where: { email, is_deleted: 0 } })
+  if (!user) {
+    return res.send({ status: false, message: 'Account not found.' })
+  }
+  if (user.is_otp_verified) {
+    return res.send({ status: false, message: 'Account already verified.' })
+  }
+  if (user.account_verification_otp !== otp) {
+    return res.send({ status: false, message: 'Invalid verification code. Please try again.' })
+  }
+  await User.update(
+    { is_otp_verified: 1, otp_verified_at: new Date() },
+    { where: { user_id: user.user_id } }
+  )
+
+  // Auto-login: issue tokens so the user lands directly on the dashboard
+  const accessToken = jwt.sign({ id: user.user_id }, process.env.JWT_SECRET, { expiresIn: '30m' })
+  const refreshToken = jwt.sign({ id: user.user_id }, process.env.JWT_SECRET, { expiresIn: '7d' })
+  await User.update(
+    { refresh_token: refreshToken, is_valid_refresh_token: true },
+    { where: { user_id: user.user_id } }
+  )
+  res.cookie('refreshToken', refreshToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 7 * 24 * 60 * 60 * 1000 })
+  res.cookie('accessToken', accessToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 30 * 60 * 1000 })
+
+  // Send welcome email now that account is verified
+  sendEmail(
+    user.email,
+    'Welcome to Grant Maestro',
+    'welcome',
+    { name: user.first_name || user.email },
+    null
+  )
+
+  const userDetails = {
+    user_id: user.user_id,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    email: user.email,
+    user_type: user.user_type,
+    organization_id: user.organization_id,
+    preferred_subscription_plan_id: user.preferred_subscription_plan_id,
+  }
+
+  res.json({
+    status: true,
+    message: 'Account verified successfully. Welcome to Grant Maestro!',
+    data: { userDetails },
   })
 })
 
