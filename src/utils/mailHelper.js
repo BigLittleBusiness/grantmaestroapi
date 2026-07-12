@@ -17,16 +17,21 @@ const __dirname = path.dirname(__filename)
  *   AWS_SES_REGION   - e.g. ap-southeast-2
  *   AWS_ACCESS_KEY_ID
  *   AWS_SECRET_ACCESS_KEY
- *   FROM_EMAIL       - verified SES sender address
+ *   FROM_EMAIL       - sender under the verified SES domain, e.g. noreply@grantmaestro.com
  */
 function createTransporter() {
-  const sesClient = new SESClient({
+  const sesConfig = {
     region: process.env.AWS_SES_REGION || 'ap-southeast-2',
-    credentials: {
+  }
+
+  if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+    sesConfig.credentials = {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID,
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    },
-  })
+    }
+  }
+
+  const sesClient = new SESClient(sesConfig)
 
   return nodemailer.createTransport({
     SES: { ses: sesClient, aws: { SendRawEmailCommand } },

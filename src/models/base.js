@@ -1,5 +1,4 @@
 import Sequelize from 'sequelize'
-import dbConfig from '../../config/dbConnection.json' with {type:"json"}
 
 import UserModel from '../models/userModel.js'
 import UserRoleModel from './userRoleModel.js'
@@ -29,11 +28,12 @@ const seq = Sequelize
 
 //connect to the database
 const sequelize = new Sequelize(
-  dbConfig.databaseName,
-  dbConfig.databaseUser,
-  dbConfig.databasePass,
+  process.env.DB_NAME || 'grantmaestro',
+  process.env.DB_USER || 'root',
+  process.env.DB_PASSWORD || '',
   {
-    host: 'localhost',
+    host: process.env.DB_HOST || 'localhost',
+    port: Number(process.env.DB_PORT || 3306),
     dialect: 'mysql',
     pool: {
       max: 10,
