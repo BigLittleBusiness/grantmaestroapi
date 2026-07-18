@@ -1,0 +1,79 @@
+name: GrantMaestro Backend Image Deploy
+
+on:
+  push:
+    branches:
+      - staging
+      - prod
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: Environment to deploy
+        required: true
+        type: choice
+        options:
+          - uat
+          - prod
+
+concurrency:
+  group: backend-image-deploy-${{ github.event_name == 'workflow_dispatch' && inputs.target_env || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-southeast-2
+
+jobs:
+  deploy:
+    name: Build and Deploy Backend Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine target environment
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TARGET_ENV="${{ inputs.target_env }}"
+          elif [[ "${{ github.ref_name }}" == "prod" ]]; then
+            TARGET_ENV="prod"
+          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
+            TARGET_ENV="uat"
+          else
+            echo "Unsupported branch: ${{ github.ref_name }}" >&2
+            exit 1
+          fi
+
+          if [[ "$TARGET_ENV" == "prod" ]]; then
+            IMAGE_TAG="prod-latest"
+            HEALTH_URL="https://api.grantmaestro.com/api/health"
+            HEALTH_ORIGIN="https://app.grantmaestro.com"
+          else
+            IMAGE_TAG="uat-latest"
+            HEALTH_URL="https://api.uat.grantmaestro.com/api/health"
+            HEALTH_ORIGIN="https://app.uat.grantmaestro.com"
+          fi
+
+          echo "TARGET_ENV=$TARGET_ENV" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
+          echo "HEALTH_URL=$HEALTH_URL" >> "$GITHUB_ENV"
+          echo "HEALTH_ORIGIN=$HEALTH_ORIGIN" >> "$GITHUB_ENV"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Deploy backend image to ECS
+        run: ./scripts/deploy.sh "$TARGET_ENV" --region "$AWS_REGION" --tag "$IMAGE_TAG" --skip-db-bootstrap
+
+      - name: Verify backend health and CORS
+        run: |
+          curl -fsS -i -H "Origin: ${HEALTH_ORIGIN}" "$HEALTH_URL"

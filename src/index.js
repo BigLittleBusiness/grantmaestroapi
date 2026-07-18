@@ -17,7 +17,7 @@ import { fileURLToPath } from 'url'
 dotenv.config({ path: './config/config.env' })
 
 const app = express()
-app.enable('trust proxy')
+app.set('trust proxy', 1)
 
 // ── Security headers ────────────────────────────────────────────────────────
 app.use(helmet())
@@ -79,6 +79,13 @@ const corsOptions = {
 }
 app.use(cookieParser())
 app.use(cors(corsOptions))
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'grantmaestro-api',
+    domain: 'grantmaestro.com',
+  })
+})
 app.use('/v1', grantMaestroRouter)
 app.post('/webhook', paymentWebhook)
 
@@ -118,7 +125,7 @@ const swaggerDocs = swaggerJsDoc(swaggerOptions)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs))
 
 let server = {}
-if (MODE === 'development') {
+if (process.env.ENABLE_HTTPS !== 'true') {
   server = app.listen(PORT, () => {
     console.log(`Server running in ${MODE} mode on port ${PORT}`)
   })
