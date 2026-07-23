@@ -78,6 +78,32 @@ The app does not have a migrations/seeders folder. Schema is currently created b
 2. Roll the ECS service so Sequelize creates/updates tables.
 3. Seed required roles and subscription plans idempotently.
 
+## Production Cutover
+
+Production uses the same two-phase flow as UAT:
+
+```bash
+cd grantmaestroapi
+cp terraform/terraform.prod.tfvars.example terraform/terraform.prod.tfvars
+# Keep enable_https=false for the first apply.
+AWS_PROFILE=grantmaestro scripts/infra.sh prod apply
+AWS_PROFILE=grantmaestro scripts/deploy.sh prod --region ap-southeast-2
+```
+
+After ACM is issued, update `terraform/terraform.prod.tfvars`:
+
+```hcl
+enable_https = true
+```
+
+Then re-apply:
+
+```bash
+AWS_PROFILE=grantmaestro scripts/infra.sh prod apply
+```
+
+Only after this second apply should the GitHub `prod` branch deployment be used, because the workflow verifies `https://api.grantmaestro.com/api/health`.
+
 ## GitHub Actions
 
 `.github/workflows/deploy-aws.yml` does not run Terraform. It only:
@@ -85,3 +111,9 @@ The app does not have a migrations/seeders folder. Schema is currently created b
 1. Builds and pushes the Docker image.
 2. Forces the ECS service deployment.
 3. Verifies `/api/health`.
+
+Branch behavior:
+
+- Push to `staging` deploys UAT.
+- Push to `prod` deploys production.
+- Manual `workflow_dispatch` can deploy either `uat` or `prod`.
