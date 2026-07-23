@@ -68,6 +68,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Verify AWS deploy identity
+        run: |
+          aws sts get-caller-identity
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
