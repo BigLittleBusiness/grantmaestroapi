@@ -20,6 +20,11 @@ import {
   deletePromoCode,
   getPlatformStats,
 } from '../../controllers/adminPlansController.js'
+import {
+  fetchEmailSettings,
+  saveEmailSettings,
+  testEmailSettings,
+} from '../../controllers/emailSettingsController.js'
 
 const adminRouter = express.Router()
 
@@ -58,6 +63,11 @@ adminRouter.get('/pin-settings/test-connection', protect, testPinConnection)
 
 // ── Platform Stats
 adminRouter.get('/platform-stats', protect, getPlatformStats)
+
+// ── Email Settings ────────────────────────────────────────────────────────────
+adminRouter.get('/email-settings/fetch', protect, fetchEmailSettings)
+adminRouter.post('/email-settings/save', protect, saveEmailSettings)
+adminRouter.post('/email-settings/test', protect, testEmailSettings)
 
 // ── Subscription Plans ──────────────────────────────────────────────────────
 adminRouter.get('/plans', protect, listPlans)
