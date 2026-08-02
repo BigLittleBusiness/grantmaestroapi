@@ -21,6 +21,7 @@ import SubscriptionPlansModel from './subscriptionPlans.js'
 import SupportTicketModel from './supportTicketModel.js'
 import GrantCategoryModel from './grantCategoryModel.js'
 import SystemSettingsModel from './systemSettingsModel.js'
+import PromoCodeModel from './promoCodeModel.js'
 
 //declear params
 const Op = Sequelize.Op
@@ -71,6 +72,7 @@ const SubscriptionPlans = SubscriptionPlansModel(sequelize, Sequelize)
 const SupportTickets = SupportTicketModel(sequelize, Sequelize)
 const GrantCategory = GrantCategoryModel(sequelize, Sequelize)
 const SystemSettings = SystemSettingsModel(sequelize, Sequelize)
+const PromoCode = PromoCodeModel(sequelize, Sequelize)
 
 User.belongsTo(UserRole, { foreignKey: 'user_type', as: 'user_role' })
 User.hasOne(Country, { foreignKey: 'country_id', as: 'country' })
@@ -124,6 +126,7 @@ SupportTickets.belongsTo(Organization, {
 })
 
 export default {
+  PromoCode,
   Op,
   seq,
   SystemSettings,

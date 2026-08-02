@@ -9,6 +9,7 @@ import {
   pinWebhook,
 } from '../../controllers/pinPaymentController.js'
 import { subscriptionExpiryDate } from '../../controllers/authController.js'
+import { validatePromoCode } from '../../controllers/adminPlansController.js'
 
 const subscriptionRouter = express.Router()
 
@@ -78,6 +79,9 @@ subscriptionRouter.post('/create-charge', protect, createPinCharge)
  *       - Subscription
  */
 subscriptionRouter.post('/pin-webhook', pinWebhook)
+
+// Public — validate a promo code (no auth required)
+subscriptionRouter.post('/validate-promo', validatePromoCode)
 
 /**
  * @swagger

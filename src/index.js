@@ -14,7 +14,7 @@ import path from 'path'
 import { paymentWebhook } from './controllers/paymentController.js'
 import { fileURLToPath } from 'url'
 
-dotenv.config({ path: './config/config.env' })
+dotenv.config({ path: '/home/ubuntu/grantmaestroapi/config/config.env' })
 
 const app = express()
 app.set('trust proxy', 1)
@@ -124,6 +124,8 @@ const swaggerOptions = {
 const swaggerDocs = swaggerJsDoc(swaggerOptions)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs))
 
+const CERT_PATH = '/etc/letsencrypt/live/grantmaestro.com/privkey.pem'
+const useHttps = MODE !== 'development' && fs.existsSync(CERT_PATH)
 let server = {}
 if (process.env.ENABLE_HTTPS !== 'true') {
   server = app.listen(PORT, () => {
@@ -138,6 +140,10 @@ if (process.env.ENABLE_HTTPS !== 'true') {
   }
   server = https.createServer(options, app).listen(PORT, () => {
     console.log(`Secure server is running on https://localhost:${PORT}`)
+  })
+} else {
+  server = app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT} (MODE=${MODE || 'http'})`)
   })
 }
 

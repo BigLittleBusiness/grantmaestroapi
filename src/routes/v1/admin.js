@@ -12,6 +12,13 @@ import {
   fetchPinSettings,
   testPinConnection,
 } from '../../controllers/pinPaymentController.js'
+import {
+  listPlans,
+  updatePlan,
+  listPromoCodes,
+  createPromoCode,
+  deletePromoCode,
+} from '../../controllers/adminPlansController.js'
 
 const adminRouter = express.Router()
 
@@ -47,5 +54,14 @@ adminRouter.get('/pin-settings/fetch', protect, fetchPinSettings)
  *       - bearerAuth: []
  */
 adminRouter.get('/pin-settings/test-connection', protect, testPinConnection)
+
+// ── Subscription Plans ──────────────────────────────────────────────────────
+adminRouter.get('/plans', protect, listPlans)
+adminRouter.put('/plans/:plan_id', protect, updatePlan)
+
+// ── Promo Codes ──────────────────────────────────────────────────────────────
+adminRouter.get('/promo-codes', protect, listPromoCodes)
+adminRouter.post('/promo-codes', protect, createPromoCode)
+adminRouter.delete('/promo-codes/:promo_id', protect, deletePromoCode)
 
 export default adminRouter
