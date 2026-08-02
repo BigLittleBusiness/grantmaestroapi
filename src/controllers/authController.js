@@ -133,7 +133,13 @@ export const verifyOtp = asyncHandler(async (req, res, next) => {
     user.email,
     'Welcome to Grant Maestro',
     'welcome',
-    { name: user.first_name || user.email },
+    {
+      name: user.first_name || user.email,
+      email: user.email,
+      loginUrl: process.env.FRONTEND_URL + '/login',
+      supportUrl: process.env.FRONTEND_URL + '/support',
+      year: new Date().getFullYear(),
+    },
     null
   )
 
@@ -266,6 +272,7 @@ export const login = asyncHandler(async (req, res, next) => {
       ? user.preferred_subscription_plan_id
       : ''
   userDetails.subscription_status = subscriptionStatus
+  userDetails.requires_password_reset = user.requires_password_reset || 0
   const accessToken = jwt.sign({ id: user.user_id }, process.env.JWT_SECRET, {
     expiresIn: '30m',
   })
@@ -391,7 +398,7 @@ export const forgotPassword = asyncHandler(async (req, res, next) => {
     charset: 'numeric',
     capitalization: 'uppercase',
   })
-  const frontendSiteUrl = 'http://localhost:3000/'
+  const frontendSiteUrl = (process.env.FRONTEND_URL || 'http://localhost:3000') + '/'
   const uid = CommonHelper.encrypt(email)
   const salt = CommonHelper.encrypt(OTP)
   const url = frontendSiteUrl + 'reset-password?uid=' + uid + '&code=' + salt
@@ -414,13 +421,17 @@ export const forgotPassword = asyncHandler(async (req, res, next) => {
   )
   sendEmail(
     email,
-    'Reset Password Link',
+    'Reset Your Password — Grant Maestro',
     'passwordReset',
     {
-      url: url,
+      resetUrl: url,
       name: user.first_name ? user.first_name : '',
+      email: email,
+      loginUrl: process.env.FRONTEND_URL + '/login',
+      supportUrl: process.env.FRONTEND_URL + '/support',
+      year: new Date().getFullYear(),
     },
-    null // Attachments (optional)
+    null
   )
 
   res.send({
@@ -496,11 +507,12 @@ export const changePassword = asyncHandler(async (req, res, next) => {
     })
   }
   const decodedNewPass = atob(new_password)
-  await User.update(
+    await User.update(
     {
       password: bcrypt.hashSync(decodedNewPass, 8),
       is_valid_refresh_token: false,
       token: null,
+      requires_password_reset: 0,
     },
     {
       where: {
@@ -508,7 +520,6 @@ export const changePassword = asyncHandler(async (req, res, next) => {
       },
     }
   )
-
   res.send({
     status: true,
     message:

@@ -18,6 +18,7 @@ import {
   listPromoCodes,
   createPromoCode,
   deletePromoCode,
+  getPlatformStats,
 } from '../../controllers/adminPlansController.js'
 
 const adminRouter = express.Router()
@@ -54,6 +55,9 @@ adminRouter.get('/pin-settings/fetch', protect, fetchPinSettings)
  *       - bearerAuth: []
  */
 adminRouter.get('/pin-settings/test-connection', protect, testPinConnection)
+
+// ── Platform Stats
+adminRouter.get('/platform-stats', protect, getPlatformStats)
 
 // ── Subscription Plans ──────────────────────────────────────────────────────
 adminRouter.get('/plans', protect, listPlans)

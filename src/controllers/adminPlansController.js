@@ -7,7 +7,7 @@
 
 import asyncHandler from '../middlewares/async.js'
 import base from '../models/base.js'
-
+import { Op } from 'sequelize'
 const { SubscriptionPlans, PromoCode } = base
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -196,6 +196,78 @@ export const validatePromoCode = asyncHandler(async (req, res) => {
       discount_value:  promo.discount_value,
       duration_months: promo.duration_months,
       expires_at:      promo.expires_at,
+    },
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLATFORM STATS (Sys Admin Dashboard)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /v1/admin/platform-stats
+ * Returns platform-wide metrics for the Sys Admin dashboard.
+ */
+export const getPlatformStats = asyncHandler(async (req, res) => {
+  const { User, Organization, Grant, Task } = base
+
+  const today = new Date()
+  const thirtyDaysAgo = new Date(today)
+  thirtyDaysAgo.setDate(today.getDate() - 30)
+
+  const [
+    totalOrganisations,
+    activeSubscriptions,
+    expiredSubscriptions,
+    totalUsers,
+    totalGrants,
+    totalTasks,
+    newOrgsLast30Days,
+    recentOrgs,
+  ] = await Promise.all([
+    Organization.count({ where: { is_deleted: 0 } }),
+    User.count({
+      where: {
+        user_type: 2,
+        is_deleted: 0,
+        subscription_expiry_date: { [Op.gte]: today },
+      },
+    }).catch(() => 0),
+    User.count({
+      where: {
+        user_type: 2,
+        is_deleted: 0,
+        subscription_expiry_date: { [Op.lt]: today },
+      },
+    }).catch(() => 0),
+    User.count({ where: { is_deleted: 0 } }),
+    Grant.count({ where: { is_deleted: 0 } }),
+    Task.count({ where: { is_deleted: 0 } }),
+    Organization.count({
+      where: {
+        is_deleted: 0,
+        created_at: { [Op.gte]: thirtyDaysAgo },
+      },
+    }).catch(() => 0),
+    Organization.findAll({
+      where: { is_deleted: 0 },
+      attributes: ['organization_id', 'organization_name', 'created_at'],
+      order: [['created_at', 'DESC']],
+      limit: 10,
+    }),
+  ])
+
+  res.json({
+    success: true,
+    data: {
+      totalOrganisations,
+      activeSubscriptions,
+      expiredSubscriptions,
+      totalUsers,
+      totalGrants,
+      totalTasks,
+      newOrgsLast30Days,
+      recentOrgs,
     },
   })
 })

@@ -52,6 +52,7 @@ export default (sequelize, Sequelize) => {
         defaultValue: 0,
       },
       otp_verified_at: { type: Sequelize.DATE, allowNull: true },
+      requires_password_reset: { type: Sequelize.TINYINT, allowNull: false, defaultValue: 0 },
 
       user_type: {
         type: Sequelize.INTEGER(10).UNSIGNED,

@@ -1,7 +1,7 @@
 import asyncHandler from '../middlewares/async.js'
 import CommonHelper from '../utils/commonHelper.js'
 import base from '../models/base.js'
-const { Op, User, UserRole, MasterData, Grant, Task } = base
+const { Op, User, UserRole, MasterData, Grant, Task, SubscriptionPlans } = base
 import sendEmail from '../utils/mailHelper.js'
 import { profileImageUrl } from '../utils/s3UrlHelper.js'
 
@@ -32,8 +32,37 @@ export const addTeamMember = asyncHandler(async (req, res, next) => {
     })
   }
 
+  // ── Seat limit check ──────────────────────────────────────────────────────
+  const currentMemberCount = await User.count({
+    where: { organization_id: req.user.organization_id, is_deleted: 0 },
+  })
+  const plan = req.user.preferred_subscription_plan_id
+    ? await SubscriptionPlans.findOne({ where: { plan_id: req.user.preferred_subscription_plan_id, is_deleted: 0 } })
+    : null
+  const totalSeats = plan ? (plan.admin_seats || 1) + (plan.team_seats || 3) : 4
+  // Warn admin when they are at 80% seat capacity
+  if (currentMemberCount >= Math.floor(totalSeats * 0.8)) {
+    sendEmail(
+      req.user.email,
+      'Seat Limit Warning — Grant Maestro',
+      'seatLimitWarning',
+      {
+        name: req.user.first_name || 'there',
+        currentCount: currentMemberCount + 1, // including the one being added
+        totalSeats,
+        planName: plan ? plan.plan_name : 'your current plan',
+        upgradeUrl: process.env.FRONTEND_URL + '/settings/subscription',
+        loginUrl: process.env.FRONTEND_URL + '/login',
+        recipientEmail: req.user.email,
+        year: new Date().getFullYear(),
+      },
+      null
+    )
+  }
+
   const password = await CommonHelper.generatePassword()
   const usrObj = {
+    requires_password_reset: 1,
     email,
     password,
     first_name,
@@ -57,15 +86,25 @@ export const addTeamMember = asyncHandler(async (req, res, next) => {
     usrObj.subscription_expiry_date = req.user.subscription_expiry_date
   }
   const member = await User.create(usrObj)
+  // Look up the inviting admin's name and org name for the email
+  const inviter = req.user
+  const invitedBy = `${inviter.first_name || ''} ${inviter.last_name || ''}`.trim() || 'Your administrator'
+  const orgName = inviter.organization_name || 'your organisation'
   sendEmail(
     member?.email,
-    'Account creation Mail',
+    'You have been added to Grant Maestro',
     'teamMember',
     {
       email: member?.email,
-      password: password,
+      tempPassword: password,
+      invitedBy,
+      orgName,
+      loginUrl: process.env.FRONTEND_URL + '/login',
+      supportEmail: process.env.FROM_EMAIL || 'support@grantmaestro.com',
+      supportUrl: process.env.FRONTEND_URL + '/support',
+      year: new Date().getFullYear(),
     },
-    null // Attachments (optional)
+    null
   )
 
   const memberInfo = await User.findOne({

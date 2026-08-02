@@ -2,40 +2,43 @@ doctype html
 html
   head
     meta(charset="UTF-8")
-    title Welcome to Our Platform 1
+    meta(name="viewport" content="width=device-width, initial-scale=1.0")
+    title You have been added to Grant Maestro
     style.
-      body {
-        font-family: Arial, sans-serif;
-        background-color: #f4f4f4;
-        padding: 20px;
-      }
-      .container {
-        max-width: 600px;
-        margin: auto;
-        background: #ffffff;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      }
-      h1 {
-        color: #333;
-      }
-      p {
-        font-size: 16px;
-        color: #555;
-      }
-      .button {
-        display: inline-block;
-        padding: 10px 20px;
-        background-color: #007bff;
-        color: white;
-        text-decoration: none;
-        border-radius: 5px;
-        margin-top: 20px;
-      }
+      body{margin:0;padding:0;background-color:#f0f4f8;font-family:Arial,sans-serif}
+      .wrapper{max-width:600px;margin:40px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+      .hdr{background:#1a3c5e;padding:32px 40px;text-align:center}
+      .hdr h1{margin:0;color:#fff;font-size:24px;font-weight:700}
+      .hdr p{margin:6px 0 0;color:#a8c4e0;font-size:13px}
+      .bdy{padding:36px 40px}
+      .bdy h2{color:#1a3c5e;font-size:20px;margin:0 0 16px}
+      .bdy p{color:#4a5568;font-size:15px;line-height:1.7;margin:0 0 16px}
+      .creds{background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:16px 20px;margin:0 0 24px}
+      .creds p{margin:0 0 8px;font-size:14px;color:#2d3748}
+      .creds p:last-child{margin:0}
+      .notice{background:#fffbeb;border-left:4px solid #f59e0b;border-radius:4px;padding:12px 16px;margin:0 0 24px}
+      .notice p{margin:0;font-size:13px;color:#92400e}
+      .btn{display:inline-block;margin:8px 0 24px;padding:14px 32px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600}
+      .ftr{background:#f7fafc;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0}
+      .ftr p{color:#718096;font-size:12px;margin:0;line-height:1.6}
+      .ftr a{color:#2563eb;text-decoration:none}
   body
-    .container
-      h1 Welcome!
-      p please login with credentials given and reset your password 
-      p email : #{email}
-      p password : #{password}
+    .wrapper
+      .hdr
+        h1 Grant Maestro
+        p Smarter Grant Management for Local Government
+      .bdy
+        h2 You have been added to #{orgName}
+        p #{invitedBy} has added you as a team member on Grant Maestro — the grant management platform used by #{orgName} to track and manage their grant portfolio.
+        p Your temporary login credentials are below. You will be prompted to set a new password when you first log in.
+        .creds
+          p <strong>Login URL:</strong> &nbsp; <a href=loginUrl>#{loginUrl}</a>
+          p <strong>Email:</strong> &nbsp; #{email}
+          p <strong>Temporary Password:</strong> &nbsp; #{tempPassword}
+        .notice
+          p <strong>Security note:</strong> &nbsp; For your protection, you will be required to change this password immediately after your first login.
+        a.btn(href=loginUrl) Log In to Grant Maestro
+        p If you were not expecting this invitation or believe it was sent in error, please disregard this email or contact #{supportEmail}.
+      .ftr
+        p &copy; #{year} Grant Maestro &nbsp;|&nbsp; <a href=loginUrl>Log In</a> &nbsp;|&nbsp; <a href=supportUrl>Support</a>
+        p This email was sent to #{email} on behalf of #{orgName}.

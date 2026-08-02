@@ -3,7 +3,7 @@ html
   head
     meta(charset="UTF-8")
     meta(name="viewport" content="width=device-width, initial-scale=1.0")
-    title Welcome to Grant Maestro
+    title Seat Limit Reached — Grant Maestro
     style.
       body{margin:0;padding:0;background-color:#f0f4f8;font-family:Arial,sans-serif}
       .wrapper{max-width:600px;margin:40px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)}
@@ -13,9 +13,9 @@ html
       .bdy{padding:36px 40px}
       .bdy h2{color:#1a3c5e;font-size:20px;margin:0 0 16px}
       .bdy p{color:#4a5568;font-size:15px;line-height:1.7;margin:0 0 16px}
-      .steps{background:#f7fafc;border-left:4px solid #2563eb;border-radius:4px;padding:16px 20px;margin:0 0 24px}
-      .steps p{margin:0 0 8px;color:#2d3748;font-size:14px}
-      .steps p:last-child{margin:0}
+      .info{background:#fffbeb;border-left:4px solid #f59e0b;border-radius:4px;padding:16px 20px;margin:0 0 24px}
+      .info p{margin:0 0 8px;font-size:14px;color:#92400e}
+      .info p:last-child{margin:0}
       .btn{display:inline-block;margin:8px 0 24px;padding:14px 32px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600}
       .ftr{background:#f7fafc;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0}
       .ftr p{color:#718096;font-size:12px;margin:0;line-height:1.6}
@@ -26,16 +26,15 @@ html
         h1 Grant Maestro
         p Smarter Grant Management for Local Government
       .bdy
-        h2 Welcome aboard, #{name}!
-        p Your account has been verified and you are ready to start managing your grants with confidence. Grant Maestro gives your team a single, secure place to track every grant from discovery through to acquittal.
-        p Here is how to get started:
-        .steps
-          p ✓ &nbsp; <strong>Add your first grant</strong> — navigate to Grant List and click "Add Grant"
-          p ✓ &nbsp; <strong>Invite your team</strong> — go to Team Members to add colleagues
-          p ✓ &nbsp; <strong>Assign tasks</strong> — link tasks to grants and assign them to team members
-          p ✓ &nbsp; <strong>Track deadlines</strong> — your dashboard calendar shows all upcoming grant dates
-        a.btn(href=loginUrl) Go to My Dashboard
-        p If you have any questions, our support team is here to help. Submit a support ticket from within your dashboard at any time.
+        h2 Your team seat limit has been reached
+        p Hi #{name}, your organisation <strong>#{orgName}</strong> has reached the included seat limit for your current plan.
+        .info
+          p <strong>Current plan:</strong> &nbsp; #{planName}
+          p <strong>Included seats:</strong> &nbsp; #{includedSeats}
+          p <strong>Seats in use:</strong> &nbsp; #{seatsUsed}
+          p <strong>Overage rate:</strong> &nbsp; $#{overageRate} AUD per additional seat per month
+        p Additional team members can still be added — each extra seat will be charged at the overage rate above on your next billing cycle. To avoid overage charges, consider upgrading your plan.
+        a.btn(href=billingUrl) Manage Plan &amp; Billing
       .ftr
         p &copy; #{year} Grant Maestro &nbsp;|&nbsp; <a href=loginUrl>Log In</a> &nbsp;|&nbsp; <a href=supportUrl>Support</a>
-        p This email was sent to #{email}. If you did not create this account, please contact us immediately.
+        p This notification was sent to #{email}.

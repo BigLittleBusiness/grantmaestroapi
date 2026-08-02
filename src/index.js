@@ -12,6 +12,7 @@ import https from 'https'
 import fs from 'fs'
 import path from 'path'
 import { paymentWebhook } from './controllers/paymentController.js'
+import './scheduledJobs.js'
 import { fileURLToPath } from 'url'
 
 const app = express()
