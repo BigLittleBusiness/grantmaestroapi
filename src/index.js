@@ -1,9 +1,9 @@
+import './env.js' // MUST be first — loads dotenv before any other module reads process.env
 import express from 'express'
 import helmet from 'helmet'
 import { rateLimit } from 'express-rate-limit'
 import swaggerUi from 'swagger-ui-express'
 import swaggerJsDoc from 'swagger-jsdoc'
-import dotenv from 'dotenv'
 import errorHandler from './middlewares/error.js'
 import grantMaestroRouter from './routes/v1/index.js'
 import cors from 'cors'
@@ -13,8 +13,6 @@ import fs from 'fs'
 import path from 'path'
 import { paymentWebhook } from './controllers/paymentController.js'
 import { fileURLToPath } from 'url'
-
-dotenv.config({ path: '/home/ubuntu/grantmaestroapi/config/config.env' })
 
 const app = express()
 app.set('trust proxy', 1)
@@ -125,7 +123,6 @@ const swaggerDocs = swaggerJsDoc(swaggerOptions)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs))
 
 const CERT_PATH = '/etc/letsencrypt/live/grantmaestro.com/privkey.pem'
-const useHttps = MODE !== 'development' && fs.existsSync(CERT_PATH)
 let server = {}
 if (process.env.ENABLE_HTTPS !== 'true') {
   server = app.listen(PORT, () => {
@@ -140,10 +137,6 @@ if (process.env.ENABLE_HTTPS !== 'true') {
   }
   server = https.createServer(options, app).listen(PORT, () => {
     console.log(`Secure server is running on https://localhost:${PORT}`)
-  })
-} else {
-  server = app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT} (MODE=${MODE || 'http'})`)
   })
 }
 
