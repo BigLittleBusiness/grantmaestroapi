@@ -25,6 +25,11 @@ import {
   saveEmailSettings,
   testEmailSettings,
 } from '../../controllers/emailSettingsController.js'
+import {
+  fetchStripeSettings,
+  saveStripeSettings,
+  testStripeConnection,
+} from '../../controllers/stripeSettingsController.js'
 
 const adminRouter = express.Router()
 
@@ -68,6 +73,11 @@ adminRouter.get('/platform-stats', protect, getPlatformStats)
 adminRouter.get('/email-settings/fetch', protect, fetchEmailSettings)
 adminRouter.post('/email-settings/save', protect, saveEmailSettings)
 adminRouter.post('/email-settings/test', protect, testEmailSettings)
+
+// ── Stripe Settings ────────────────────────────────────────────────────────────
+adminRouter.get('/stripe-settings/fetch', protect, fetchStripeSettings)
+adminRouter.post('/stripe-settings/save', protect, saveStripeSettings)
+adminRouter.get('/stripe-settings/test-connection', protect, testStripeConnection)
 
 // ── Subscription Plans ──────────────────────────────────────────────────────
 adminRouter.get('/plans', protect, listPlans)

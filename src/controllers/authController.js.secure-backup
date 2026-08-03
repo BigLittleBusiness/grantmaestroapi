@@ -125,8 +125,8 @@ export const verifyOtp = asyncHandler(async (req, res, next) => {
     { refresh_token: refreshToken, is_valid_refresh_token: true },
     { where: { user_id: user.user_id } }
   )
-  res.cookie('refreshToken', refreshToken, { httpOnly: true, secure: false, sameSite: 'Lax', maxAge: 7 * 24 * 60 * 60 * 1000 })
-  res.cookie('accessToken', accessToken, { httpOnly: true, secure: false, sameSite: 'Lax', maxAge: 30 * 60 * 1000 })
+  res.cookie('refreshToken', refreshToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 7 * 24 * 60 * 60 * 1000 })
+  res.cookie('accessToken', accessToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 30 * 60 * 1000 })
 
   // Send welcome email now that account is verified
   sendEmail(
@@ -292,14 +292,14 @@ export const login = asyncHandler(async (req, res, next) => {
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
-    secure: false,
-    sameSite: 'Lax',
+    secure: true,
+    sameSite: 'None',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   })
   res.cookie('accessToken', accessToken, {
     httpOnly: true,
-    secure: false,
-    sameSite: 'Lax',
+    secure: true,
+    sameSite: 'None',
     maxAge: 30 * 60 * 1000,
   })
   res.json({
@@ -785,8 +785,8 @@ export const logout = asyncHandler(async (req, res) => {
     }
   }
 
-  res.clearCookie('accessToken', { httpOnly: true, secure: false, sameSite: 'Lax' })
-  res.clearCookie('refreshToken', { httpOnly: true, secure: false, sameSite: 'Lax' })
+  res.clearCookie('accessToken', { httpOnly: true, secure: true, sameSite: 'None' })
+  res.clearCookie('refreshToken', { httpOnly: true, secure: true, sameSite: 'None' })
   res.json({ success: true, message: 'Logged out successfully' })
 })
 
@@ -821,8 +821,8 @@ export const refreshTokenValidation = asyncHandler(async (req, res) => {
 
     res.cookie('accessToken', newAccessToken, {
       httpOnly: true,
-      secure: false,
-      sameSite: 'Lax',
+      secure: true,
+      sameSite: 'None',
       maxAge: 30 * 60 * 1000,
     })
     res.json({ success: true, message: 'Access token refreshed successfully' })
