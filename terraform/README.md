@@ -15,6 +15,41 @@ This backend stack is deployed from localhost, not by GitHub Actions. GitHub Act
 
 UAT owns the shared VPC, ALB, and MySQL RDS instance. Production reuses the UAT-owned ALB/RDS, matching the GrantThrive setup. Root and `www.grantmaestro.com` are intentionally not managed by this stack.
 
+## Cost Controls
+
+UAT keeps `desired_count = 0` for the legacy `grantmaestro-uat-prod` service. The real production backend runs from the prod workspace as `grantmaestro-prod-prod`; UAT should only run `grantmaestro-uat-uat`.
+
+Backend ECR repositories are managed with lifecycle policies:
+
+```hcl
+ecr_keep_tagged_images         = 10
+ecr_untagged_image_expire_days = 7
+```
+
+This keeps recent deploy images available for rollback while automatically expiring older image layers.
+
+## Database Engine
+
+The shared RDS instance runs MySQL `8.4.11` LTS. MySQL 8.0 is intentionally avoided because AWS RDS charges Extended Support for MySQL 8.0 after standard support ended.
+
+Current shared DB identifier:
+
+```text
+grantmaestro-uat-db-84-20260902
+```
+
+Keep these values in the backend tfvars so new machines and future Terraform runs keep using the restored MySQL 8.4 DB:
+
+```hcl
+# terraform.uat.tfvars
+db_engine_version      = "8.4.11"
+db_instance_identifier = "grantmaestro-uat-db-84-20260902"
+
+# terraform.prod.tfvars
+db_engine_version              = "8.4.11"
+shared_rds_instance_identifier = "grantmaestro-uat-db-84-20260902"
+```
+
 ## Email / SES
 
 SES domain verification is managed by the shared state stack in `terraform-state`, not by each app workspace. Route53 records for SES domain verification, Easy DKIM, and `mail.grantmaestro.com` MAIL FROM are created automatically.

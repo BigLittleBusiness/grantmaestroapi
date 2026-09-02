@@ -25,7 +25,7 @@ data "aws_route53_zone" "primary" {
 
 data "aws_db_instance" "shared_rds" {
   count                  = local.use_shared_rds_alb ? 1 : 0
-  db_instance_identifier = "${local.shared_name_prefix}-db"
+  db_instance_identifier = local.shared_db_identifier
 }
 
 data "aws_db_subnet_group" "shared_rds" {
@@ -319,6 +319,43 @@ resource "aws_ecr_repository" "backend" {
   }
 }
 
+resource "aws_ecr_lifecycle_policy" "backend" {
+  repository = aws_ecr_repository.backend.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Expire untagged images after ${var.ecr_untagged_image_expire_days} days"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = var.ecr_untagged_image_expire_days
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep the last ${var.ecr_keep_tagged_images} tagged images"
+        selection = {
+          tagStatus = "tagged"
+          tagPatternList = [
+            "*"
+          ]
+          countType   = "imageCountMoreThan"
+          countNumber = var.ecr_keep_tagged_images
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
+
 resource "aws_cloudwatch_log_group" "backend" {
   name              = "/ecs/${local.name_prefix}/backend"
   retention_in_days = 30
@@ -331,26 +368,28 @@ resource "aws_db_subnet_group" "backend" {
 }
 
 resource "aws_db_instance" "backend" {
-  count                      = local.use_shared_rds_alb ? 0 : 1
-  identifier                 = "${local.name_prefix}-db"
-  engine                     = "mysql"
-  engine_version             = "8.0"
-  instance_class             = var.db_instance_class
-  allocated_storage          = var.db_allocated_storage
-  storage_type               = "gp3"
-  db_name                    = var.db_name
-  username                   = var.db_username
-  password                   = random_password.db_password.result
-  publicly_accessible        = false
-  multi_az                   = false
-  storage_encrypted          = true
-  backup_retention_period    = var.db_backup_retention_days
-  deletion_protection        = var.enable_deletion_protection
-  skip_final_snapshot        = true
-  db_subnet_group_name       = aws_db_subnet_group.backend[0].name
-  vpc_security_group_ids     = [aws_security_group.db.id]
-  apply_immediately          = true
-  auto_minor_version_upgrade = true
+  count                       = local.use_shared_rds_alb ? 0 : 1
+  identifier                  = local.db_identifier
+  engine                      = "mysql"
+  engine_version              = var.db_engine_version
+  instance_class              = var.db_instance_class
+  allocated_storage           = var.db_allocated_storage
+  storage_type                = "gp3"
+  db_name                     = var.db_name
+  username                    = var.db_username
+  password                    = random_password.db_password.result
+  publicly_accessible         = false
+  multi_az                    = false
+  storage_encrypted           = true
+  backup_retention_period     = var.db_backup_retention_days
+  deletion_protection         = var.enable_deletion_protection
+  skip_final_snapshot         = true
+  db_subnet_group_name        = aws_db_subnet_group.backend[0].name
+  vpc_security_group_ids      = [aws_security_group.db.id]
+  apply_immediately           = true
+  allow_major_version_upgrade = true
+  auto_minor_version_upgrade  = true
+  engine_lifecycle_support    = "open-source-rds-extended-support-disabled"
 }
 
 resource "aws_elasticache_subnet_group" "redis" {
