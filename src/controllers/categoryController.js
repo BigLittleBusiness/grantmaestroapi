@@ -79,15 +79,16 @@ export const manageCategory = asyncHandler(async (req, res, next) => {
     })
   }
   const catgObj = {
-    grant_category_name: category_name,
+    grant_category_name: category_name.trim(),
+    modified_at: new Date(),
   }
   if (category_id) {
-    await GrantCategory.update(
-      { catgObj },
-      {
-        where: { grant_category_id: category_id },
-      }
-    )
+    const [updatedCount] = await GrantCategory.update(catgObj, {
+      where: { grant_category_id: category_id, is_deleted: 0 },
+    })
+    if (!updatedCount) {
+      return res.status(404).json({ status: false, message: 'Grant category not found.', data: {} })
+    }
   } else {
     await GrantCategory.create(catgObj)
   }

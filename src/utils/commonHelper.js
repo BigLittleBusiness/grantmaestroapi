@@ -4,40 +4,25 @@ import multerS3 from "multer-s3";
 import path from "path";
 import Randomstring from "randomstring";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
-
-// ---------------------------------------------------------------------------
-// Encryption helpers (unchanged)
-// ---------------------------------------------------------------------------
-const CIPHER_ALGO = 'aes-256-cbc';
-const CIPHER_KEY  = 'g6ZOpvHQ78X4PbLzmU5eErPRtdh6mAXp';
-const CIPHER_IV   = 'o6SG75PDEbNTBYJV';
-
-const encrypt = (text) => {
-    const cipher = crypto.createCipheriv(CIPHER_ALGO, CIPHER_KEY, CIPHER_IV);
-    let crypted = cipher.update(text, 'utf8', 'hex');
-    crypted += cipher.final('hex');
-    return crypted;
-};
-
-const decrypt = (text) => {
-    const decipher = crypto.createDecipheriv(CIPHER_ALGO, CIPHER_KEY, CIPHER_IV);
-    let dec = decipher.update(text, 'hex', 'utf8');
-    dec += decipher.final('utf8');
-    return dec;
-};
+import { encryptSetting as encrypt, decryptSetting as decrypt } from './settingsCrypto.js';
 
 // ---------------------------------------------------------------------------
 // Amazon S3 client
 // ---------------------------------------------------------------------------
-const s3 = new S3Client({
-    region: process.env.AWS_SES_REGION || process.env.AWS_REGION || 'ap-southeast-2',
-    credentials: {
-        accessKeyId:     process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    },
-});
-
-const S3_BUCKET = process.env.AWS_S3_BUCKET || 'grantmaestro-uploads';
+const S3_REGION = process.env.AWS_S3_REGION || process.env.AWS_REGION || 'ap-southeast-2';
+const S3_BUCKET = process.env.AWS_S3_BUCKET || '';
+const isS3Configured = Boolean(
+    S3_BUCKET && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+);
+const s3 = isS3Configured
+    ? new S3Client({
+        region: S3_REGION,
+        credentials: {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        },
+    })
+    : null;
 
 /**
  * Maps a Multer fieldname to an S3 folder prefix.
@@ -56,18 +41,19 @@ const getS3Folder = (fieldname) => {
 // ---------------------------------------------------------------------------
 // S3 Multer storage engine
 // ---------------------------------------------------------------------------
-const s3Storage = multerS3({
-    s3:     s3,
-    bucket: S3_BUCKET,
-    acl:    'private',          // files are private; serve via signed URLs or CloudFront
-    contentType: multerS3.AUTO_CONTENT_TYPE,
-    key: (req, file, cb) => {
-        const folder   = getS3Folder(file.fieldname);
-        const ext      = path.extname(file.originalname);
-        const filename = `${file.fieldname}-${Date.now()}${ext}`;
-        cb(null, `${folder}/${filename}`);
-    },
-});
+const s3Storage = isS3Configured
+    ? multerS3({
+        s3,
+        bucket: S3_BUCKET,
+        acl: 'private',
+        contentType: multerS3.AUTO_CONTENT_TYPE,
+        key: (req, file, cb) => {
+            const folder = getS3Folder(file.fieldname);
+            const ext = path.extname(file.originalname);
+            cb(null, `${folder}/${file.fieldname}-${Date.now()}${ext}`);
+        },
+    })
+    : multer.memoryStorage();
 
 // ---------------------------------------------------------------------------
 // Multer upload instance (S3-backed)
@@ -76,6 +62,9 @@ const imageUpload = multer({
     storage: s3Storage,
     limits:  { fileSize: 10 * 1024 * 1024 }, // 10 MB
     fileFilter(req, file, cb) {
+        if (!isS3Configured) {
+            return cb(new Error('File storage is not configured. Please configure AWS S3 before uploading files.'));
+        }
         if (file.fieldname === 'profile_image' || file.fieldname === 'organization_logo') {
             if (!file.originalname.match(/\.(jpg|jpeg|png|JPEG|JPG|PNG)$/)) {
                 return cb(new Error('Please upload a valid image file (jpg, jpeg or png)'));
@@ -135,6 +124,10 @@ const unlinkFile = async (filePathOrUrl) => {
         }
     }
 
+    if (!isS3Configured) {
+        console.warn('[S3] Delete skipped because AWS S3 is not configured.');
+        return;
+    }
     try {
         await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
     } catch (err) {
@@ -155,8 +148,8 @@ const getFileBaseURL = async (modelFieldName = '', host = '') => {
     if (cdn) {
         return `https://${cdn}/${folder}/`;
     }
-    const region = process.env.AWS_SES_REGION || process.env.AWS_REGION || 'ap-southeast-2';
-    return `https://${S3_BUCKET}.s3.${region}.amazonaws.com/${folder}/`;
+    if (!isS3Configured) return '';
+    return `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${folder}/`;
 };
 
 const getFileBasePath = async (modelFieldName = '') => {
@@ -273,4 +266,5 @@ export default {
     removeFile,
     countStringOccurance,
     formatFullName,
+    isS3Configured,
 };

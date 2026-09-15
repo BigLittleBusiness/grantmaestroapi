@@ -17,31 +17,10 @@
 
 import asyncHandler from '../middlewares/async.js'
 import axios from 'axios'
-import crypto from 'crypto'
 import base from '../models/base.js'
+import { encryptSetting, decryptSetting } from '../utils/settingsCrypto.js'
 
 const { SystemSettings, User, SubscriptionPlans } = base
-
-// ---------------------------------------------------------------------------
-// Encryption helpers (reuse the same algorithm already in commonHelper.js)
-// ---------------------------------------------------------------------------
-const ALGORITHM = 'aes-256-cbc'
-const ENC_KEY = process.env.SETTINGS_ENCRYPTION_KEY || 'g6ZOpvHQ78X4PbLzmU5eErPRtdh6mAXp'
-const ENC_IV  = process.env.SETTINGS_ENCRYPTION_IV  || 'o6SG75PDEbNTBYJV'
-
-const encryptValue = (text) => {
-  const cipher = crypto.createCipheriv(ALGORITHM, ENC_KEY, ENC_IV)
-  let encrypted = cipher.update(text, 'utf8', 'hex')
-  encrypted += cipher.final('hex')
-  return encrypted
-}
-
-const decryptValue = (text) => {
-  const decipher = crypto.createDecipheriv(ALGORITHM, ENC_KEY, ENC_IV)
-  let decrypted = decipher.update(text, 'hex', 'utf8')
-  decrypted += decipher.final('utf8')
-  return decrypted
-}
 
 // ---------------------------------------------------------------------------
 // Internal helper – retrieve a single setting value by key
@@ -51,7 +30,7 @@ const getSetting = async (key) => {
     where: { setting_key: key, is_deleted: 0 },
   })
   if (!row) return null
-  return row.is_encrypted ? decryptValue(row.setting_value) : row.setting_value
+  return row.is_encrypted ? decryptSetting(row.setting_value) : row.setting_value
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +70,7 @@ export const savePinSettings = asyncHandler(async (req, res) => {
   }
 
   const upsert = async (key, value, group = 'payment', isEncrypted = false) => {
-    const storedValue = isEncrypted ? encryptValue(value) : value
+    const storedValue = isEncrypted ? encryptSetting(value) : value
     const existing = await SystemSettings.findOne({ where: { setting_key: key, is_deleted: 0 } })
     if (existing) {
       await existing.update({ setting_value: storedValue, is_encrypted: isEncrypted, modified_at: new Date() })
@@ -204,12 +183,13 @@ export const testPinConnection = asyncHandler(async (req, res) => {
  * @body {number} payment_made_for  – User.user_id                (required)
  */
 export const createPinCharge = asyncHandler(async (req, res) => {
-  const { card_token, preferred_plan_id, payment_made_for } = req.body
+  const { card_token, preferred_plan_id } = req.body
+  const payment_made_for = req.user.user_id
 
-  if (!card_token || !preferred_plan_id || !payment_made_for) {
+  if (!card_token || !preferred_plan_id) {
     return res.status(400).json({
       status: false,
-      message: 'card_token, preferred_plan_id, and payment_made_for are required.',
+      message: 'card_token and preferred_plan_id are required.',
     })
   }
 
@@ -326,16 +306,20 @@ export const pinWebhook = asyncHandler(async (req, res) => {
   const signature = req.headers['pin-signature']
   const webhookSecret = await getSetting('pin_webhook_secret')
 
-  // If a webhook secret is configured, verify the signature
-  if (webhookSecret && signature) {
-    const expectedSig = crypto
-      .createHmac('sha256', webhookSecret)
-      .update(req.rawBody || JSON.stringify(req.body))
-      .digest('hex')
+  if (!webhookSecret) {
+    return res.status(503).json({ status: false, message: 'Pin webhook verification is not configured.' })
+  }
+  if (!signature) {
+    return res.status(400).json({ status: false, message: 'Missing Pin webhook signature.' })
+  }
 
-    if (signature !== expectedSig) {
-      return res.status(401).json({ status: false, message: 'Invalid webhook signature.' })
-    }
+  const expectedSig = crypto
+    .createHmac('sha256', webhookSecret)
+    .update(req.rawBody || JSON.stringify(req.body))
+    .digest('hex')
+
+  if (signature !== expectedSig) {
+    return res.status(401).json({ status: false, message: 'Invalid webhook signature.' })
   }
 
   const event = req.body

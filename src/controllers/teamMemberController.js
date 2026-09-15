@@ -4,6 +4,7 @@ import base from '../models/base.js'
 const { Op, User, UserRole, MasterData, Grant, Task, SubscriptionPlans } = base
 import sendEmail from '../utils/mailHelper.js'
 import { profileImageUrl } from '../utils/s3UrlHelper.js'
+import { ROLE } from '../utils/routeAccessHelper.js'
 
 /**
  * @description Add a new team member
@@ -29,6 +30,18 @@ export const addTeamMember = asyncHandler(async (req, res, next) => {
     return res.send({
       status: false,
       message: 'Email already exist.',
+    })
+  }
+
+  const allowedMemberRoles = [
+    ROLE.ORGANISATION_ADMIN,
+    ROLE.TEAM_MEMBER,
+    ROLE.ACQUITTAL_CONTRIBUTOR,
+  ]
+  if (!allowedMemberRoles.includes(Number(member_type))) {
+    return res.status(422).json({
+      status: false,
+      message: 'Please select a valid organisation role.',
     })
   }
 
@@ -143,8 +156,8 @@ export const addTeamMember = asyncHandler(async (req, res, next) => {
     address: memberInfo.address,
     position: memberInfo.position ? memberInfo.position.name : '',
     position_text: memberInfo.position_text ? memberInfo.position_text : '',
-    user_role_id: memberInfo.user_role.role_id,
-    user_type: memberInfo.user_role.name,
+    user_role_id: memberInfo.user_role ? memberInfo.user_role.role_id : member.user_type,
+    user_type: memberInfo.user_role ? memberInfo.user_role.name : 'Organisation user',
     profile_image: profileImageUrl(memberInfo.profile_image),
     rate: 55,
   }
@@ -178,9 +191,23 @@ export const updateTeamMember = asyncHandler(async (req, res, next) => {
     member_type,
     position_text,
   } = req.body
+  const member = await User.findOne({
+    where: {
+      user_id: memberId,
+      organization_id: req.user.organization_id,
+      is_deleted: 0,
+      user_type: { [Op.in]: [ROLE.ORGANISATION_ADMIN, ROLE.TEAM_MEMBER, ROLE.ACQUITTAL_CONTRIBUTOR] },
+    },
+  })
+  if (!member) {
+    return res.status(404).json({ status: false, message: 'Team member not found.' })
+  }
+  if (![ROLE.ORGANISATION_ADMIN, ROLE.TEAM_MEMBER, ROLE.ACQUITTAL_CONTRIBUTOR].includes(Number(member_type))) {
+    return res.status(422).json({ status: false, message: 'Please select a valid organisation role.' })
+  }
   if (email) {
     var check = await User.findOne({
-      where: { user_id: { [Op.ne]: memberId }, email: email },
+      where: { user_id: { [Op.ne]: memberId }, email: email, is_deleted: 0 },
     })
     // console.log(check)
     if (check) {
@@ -201,7 +228,7 @@ export const updateTeamMember = asyncHandler(async (req, res, next) => {
       // position_id: (position_id) ? position_id : check.position_id,
       position_text,
     },
-    { where: { user_id: memberId } }
+    { where: { user_id: memberId, organization_id: req.user.organization_id } }
   )
   res.send({
     status: true,
@@ -221,16 +248,27 @@ export const updateTeamMember = asyncHandler(async (req, res, next) => {
  * @returns {Object} Response with status and success message
  */
 export const removeTeamMember = asyncHandler(async (req, res, next) => {
-  const memberId = req.params.member_id
-  await User.update(
+  const memberId = Number(req.params.member_id)
+  if (memberId === req.user.user_id) {
+    return res.status(422).json({ status: false, message: 'You cannot remove your own account.' })
+  }
+  const [removedCount] = await User.update(
     {
       is_deleted: 1,
       deleted_at: new Date(),
     },
     {
-      where: { user_id: memberId },
+      where: {
+        user_id: memberId,
+        organization_id: req.user.organization_id,
+        is_deleted: 0,
+        user_type: { [Op.in]: [ROLE.ORGANISATION_ADMIN, ROLE.TEAM_MEMBER, ROLE.ACQUITTAL_CONTRIBUTOR] },
+      },
     }
   )
+  if (!removedCount) {
+    return res.status(404).json({ status: false, message: 'Team member not found.' })
+  }
   res.send({
     status: true,
     message: 'Team member removed successfully',
@@ -252,7 +290,7 @@ export const fetchMemberList = asyncHandler(async (req, res, next) => {
   // const userType = req.user.user_type
   const memberFindCond = { is_deleted: 0, organization_id: organizationId }
   memberFindCond.user_type = {
-    [Op.in]: [3, 4],
+    [Op.in]: [ROLE.ORGANISATION_ADMIN, ROLE.TEAM_MEMBER, ROLE.ACQUITTAL_CONTRIBUTOR],
   }
 
   const userList = await User.findAll({
@@ -293,8 +331,8 @@ export const fetchMemberList = asyncHandler(async (req, res, next) => {
       address: el.address,
       position: el.position ? el.position.name : '',
       position_text: el.position_text ? el.position_text : '',
-      user_role_id: el.user_role.role_id,
-      user_type: el.user_role.name,
+      user_role_id: el.user_role ? el.user_role.role_id : el.user_type,
+      user_type: el.user_role ? el.user_role.name : 'Organisation user',
       profile_image: profileImageUrl(el.profile_image),
       rate: 55,
       subscription_status: el.subscription_status,

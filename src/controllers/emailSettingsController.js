@@ -10,25 +10,11 @@
  *   POST /v1/admin/email-settings/test    – send a test email
  */
 import asyncHandler from '../middlewares/async.js'
-import crypto from 'crypto'
 import nodemailer from 'nodemailer'
 import { SESClient, SendRawEmailCommand } from '@aws-sdk/client-ses'
 import base from '../models/base.js'
+import { encryptSetting, decryptSetting } from '../utils/settingsCrypto.js'
 const { SystemSettings } = base
-
-// ── Encryption (same key/IV as pinPaymentController) ─────────────────────────
-const ALGORITHM = 'aes-256-cbc'
-const ENC_KEY = process.env.SETTINGS_ENCRYPTION_KEY || 'g6ZOpvHQ78X4PbLzmU5eErPRtdh6mAXp'
-const ENC_IV  = process.env.SETTINGS_ENCRYPTION_IV  || 'o6SG75PDEbNTBYJV'
-
-const encrypt = (text) => {
-  const cipher = crypto.createCipheriv(ALGORITHM, ENC_KEY, ENC_IV)
-  return cipher.update(text, 'utf8', 'hex') + cipher.final('hex')
-}
-const decrypt = (text) => {
-  const decipher = crypto.createDecipheriv(ALGORITHM, ENC_KEY, ENC_IV)
-  return decipher.update(text, 'hex', 'utf8') + decipher.final('utf8')
-}
 
 // ── Internal helper ───────────────────────────────────────────────────────────
 const upsertSetting = async (key, value, group = 'email', isEncrypted = false) => {
@@ -53,7 +39,7 @@ const upsertSetting = async (key, value, group = 'email', isEncrypted = false) =
 const getSetting = async (key) => {
   const row = await SystemSettings.findOne({ where: { setting_key: key, is_deleted: 0 } })
   if (!row) return null
-  return row.is_encrypted ? decrypt(row.setting_value) : row.setting_value
+  return row.is_encrypted ? decryptSetting(row.setting_value) : row.setting_value
 }
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
@@ -92,7 +78,7 @@ export const saveEmailSettings = asyncHandler(async (req, res) => {
 
   // Only update the secret key if a new value was provided
   if (aws_secret_access_key && aws_secret_access_key.trim() !== '') {
-    await upsertSetting('aws_secret_access_key', encrypt(aws_secret_access_key), 'email', true)
+    await upsertSetting('aws_secret_access_key', encryptSetting(aws_secret_access_key), 'email', true)
   }
 
   // Reload env vars so mailHelper picks up new values immediately
@@ -139,7 +125,7 @@ export const testEmailSettings = asyncHandler(async (req, res) => {
     })
   }
 
-  const decryptedSecret = decrypt(secretKey)
+  const decryptedSecret = secretKey
 
   try {
     const sesClient = new SESClient({

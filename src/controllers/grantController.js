@@ -14,6 +14,30 @@ const {
   Task,
 } = base
 
+const findOwnedGrant = (grantId, organizationId) =>
+  Grant.findOne({
+    where: {
+      organization_grant_id: grantId,
+      organization_id: organizationId,
+      is_deleted: 0,
+    },
+  })
+
+const findAccessibleGrant = async (grantId, user) => {
+  const grant = await findOwnedGrant(grantId, user.organization_id)
+  if (!grant) return null
+  if (Number(user.user_type) === 1) return grant
+
+  const assignedTask = await Task.findOne({
+    where: {
+      organization_grant_id: grantId,
+      task_assigned_to: user.user_id,
+      is_deleted: 0,
+    },
+  })
+  return assignedTask ? grant : null
+}
+
 /**
  * @description Add a new grant
  * @route POST /grant/grant-add
@@ -38,6 +62,17 @@ export const addGrant = asyncHandler(async (req, res, next) => {
     opening_date,
     note_type,
   } = req.body
+
+  const category = await GrantCategory.findOne({
+    where: { grant_category_id: category_id, is_deleted: 0, is_blocked: 0 },
+  })
+  if (!category) {
+    return res.status(422).json({
+      status: false,
+      message: 'Please select a valid grant category.',
+      data: {},
+    })
+  }
 
   const grantObj = {
     organization_id: organizationId,
@@ -127,7 +162,11 @@ export const updateGrant = asyncHandler(async (req, res, next) => {
   } = req.body
   // console.log(JSON.parse(related_projects))
   const grantInfo = await Grant.findOne({
-    where: { organization_grant_id: grantId, is_deleted: 0 },
+    where: {
+      organization_grant_id: grantId,
+      organization_id: req.user.organization_id,
+      is_deleted: 0,
+    },
   })
   if (!grantInfo) {
     return res.send({
@@ -221,7 +260,7 @@ export const updateGrant = asyncHandler(async (req, res, next) => {
         : grantInfo.latest_financial_note,
     },
     {
-      where: { organization_grant_id: grantId },
+      where: { organization_grant_id: grantId, organization_id: req.user.organization_id },
     }
   )
   //update notes table
@@ -395,6 +434,18 @@ export const manageGrantReport = asyncHandler(async (req, res, next) => {
     report_template_received,
     grant_id,
   } = req.body
+  const ownedGrant = await findAccessibleGrant(grant_id, req.user)
+  if (!ownedGrant) {
+    return res.status(404).json({ status: false, message: 'Grant not found.', data: {} })
+  }
+  if (report_id) {
+    const existingReport = await GrantReports.findOne({
+      where: { report_id, organization_grant_id: grant_id },
+    })
+    if (!existingReport) {
+      return res.status(404).json({ status: false, message: 'Grant report not found.', data: {} })
+    }
+  }
   const reportObj = {
     report_title,
     report_submission_date,
@@ -481,15 +532,15 @@ export const removeReportItem = asyncHandler(async (req, res, next) => {
   const reportInfo = await GrantReports.findOne({
     where: { report_id: reportId },
   })
-  if (!reportInfo) {
-    return res.send({
+  if (!reportInfo || !(await findOwnedGrant(reportInfo.organization_grant_id, req.user.organization_id))) {
+    return res.status(404).json({
       status: false,
       message: 'Report item does not exist',
     })
   }
 
   await GrantReports.destroy({
-    where: { report_id: reportId },
+    where: { report_id: reportId, organization_grant_id: reportInfo.organization_grant_id },
   })
 
   res.send({
@@ -518,6 +569,18 @@ export const manageGrantExpense = asyncHandler(async (req, res, next) => {
     expense_payee,
     expense_paid_by,
   } = req.body
+  const ownedGrant = await findAccessibleGrant(grant_id, req.user)
+  if (!ownedGrant) {
+    return res.status(404).json({ status: false, message: 'Grant not found.', data: {} })
+  }
+  if (expense_id) {
+    const existingExpense = await GrantItemExpenses.findOne({
+      where: { expense_id, organization_grant_id: grant_id },
+    })
+    if (!existingExpense) {
+      return res.status(404).json({ status: false, message: 'Grant expense not found.', data: {} })
+    }
+  }
   const expenseObj = {
     expense_description,
     expense_amount,
@@ -572,15 +635,15 @@ export const removeExpenseItem = asyncHandler(async (req, res, next) => {
   const expenseInfo = await GrantItemExpenses.findOne({
     where: { expense_id: expenseId },
   })
-  if (!expenseInfo) {
-    return res.send({
+  if (!expenseInfo || !(await findOwnedGrant(expenseInfo.organization_grant_id, req.user.organization_id))) {
+    return res.status(404).json({
       status: false,
       message: 'Expense item does not exist',
     })
   }
 
   await GrantItemExpenses.destroy({
-    where: { expense_id: expenseId },
+    where: { expense_id: expenseId, organization_grant_id: expenseInfo.organization_grant_id },
   })
 
   res.send({
@@ -763,7 +826,11 @@ export const grantList = asyncHandler(async (req, res, next) => {
 export const getGrantDetails = asyncHandler(async (req, res, next) => {
   const grantId = req.params.grant_id
   const grantDetails = await Grant.findOne({
-    where: { organization_grant_id: grantId },
+    where: {
+      organization_grant_id: grantId,
+      organization_id: req.user.organization_id,
+      is_deleted: 0,
+    },
     include: [
       {
         model: GrantCategory,
@@ -831,6 +898,22 @@ export const getGrantDetails = asyncHandler(async (req, res, next) => {
       },
     ],
   })
+  if (!grantDetails) {
+    return res.status(404).json({ status: false, message: 'Grant not found.', data: {} })
+  }
+  if (Number(req.user.user_type) !== 1) {
+    const assignedTask = await Task.findOne({
+      where: {
+        organization_grant_id: grantId,
+        task_assigned_to: req.user.user_id,
+        is_deleted: 0,
+      },
+    })
+    if (!assignedTask) {
+      return res.status(403).json({ status: false, message: 'You do not have permission to access this grant.' })
+    }
+  }
+
   const grantInfo = {
     organization_grant_id: grantDetails.organization_grant_id,
     category_id: grantDetails.category
@@ -920,6 +1003,10 @@ export const getGrantDetails = asyncHandler(async (req, res, next) => {
  */
 export const manageGrantNote = asyncHandler(async (req, res, next) => {
   const { note_id, note_type, note, grant_id } = req.body
+  const ownedGrant = await findAccessibleGrant(grant_id, req.user)
+  if (!ownedGrant) {
+    return res.status(404).json({ status: false, message: 'Grant not found.', data: {} })
+  }
   const noteObj = {
     note_type,
     note,
@@ -928,8 +1015,14 @@ export const manageGrantNote = asyncHandler(async (req, res, next) => {
   let noteDetails = {}
   let msg = 'Notes added successfully'
   if (note_id) {
+    const existingNote = await GrantNotes.findOne({
+      where: { note_id, organization_grant_id: grant_id },
+    })
+    if (!existingNote) {
+      return res.status(404).json({ status: false, message: 'Grant note not found.', data: {} })
+    }
     await GrantNotes.update(noteObj, {
-      where: { note_id: note_id },
+      where: { note_id, organization_grant_id: grant_id },
     })
     noteDetails = await GrantNotes.findOne({
       where: { note_id: note_id },
@@ -958,7 +1051,9 @@ export const manageGrantNote = asyncHandler(async (req, res, next) => {
   if (note_type == 6) {
     grantobj.latest_financial_note = note
   }
-  await Grant.update(grantobj, { where: { organization_grant_id: grant_id } })
+  await Grant.update(grantobj, {
+    where: { organization_grant_id: grant_id, organization_id: req.user.organization_id },
+  })
   res.send({
     status: true,
     message: msg,

@@ -15,6 +15,7 @@ import {
   forgotPassword,
   resetPassword,
   login,
+  forcePasswordReset,
   changePassword,
   viewProfile,
   updateProfile,
@@ -266,6 +267,8 @@ authRouter.get('/profile-view', protect, viewProfile)
  *       400:
  *         description: Incorrect old password
  */
+authRouter.post('/force-password-reset', protect, forcePasswordReset)
+
 authRouter.post(
   '/change-password',
   protect,

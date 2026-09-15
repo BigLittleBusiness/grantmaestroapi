@@ -86,6 +86,8 @@ User.hasOne(OrganizationDepartment, {
   as: 'organization_dept',
 })
 Grant.belongsTo(GrantCategory, { foreignKey: 'category_id', as: 'category' })
+Grant.belongsTo(Organization, { foreignKey: 'organization_id', as: 'organization' })
+Organization.hasMany(Grant, { foreignKey: 'organization_id', as: 'grants' })
 Grant.hasMany(GrantProjects, {
   as: 'projects',
   foreignKey: 'organization_grant_id',

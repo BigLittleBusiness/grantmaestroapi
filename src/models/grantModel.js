@@ -98,6 +98,7 @@ export default (sequelize, Sequelize) => {
       outcome: { type: Sequelize.STRING, allowNull: true },
       outcome_date: { type: Sequelize.DATEONLY, allowNull: true },
       agreement_signed: { type: Sequelize.STRING, allowNull: true },
+      acquittal_date: { type: Sequelize.DATEONLY, allowNull: true },
       learning: { type: Sequelize.TEXT, allowNull: true },
       latest_outcome_note: {
         type: Sequelize.TEXT,

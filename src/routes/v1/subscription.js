@@ -10,6 +10,7 @@ import {
 } from '../../controllers/pinPaymentController.js'
 import { subscriptionExpiryDate } from '../../controllers/authController.js'
 import { validatePromoCode } from '../../controllers/adminPlansController.js'
+import { createCheckoutSession, getPaymentProvider } from '../../controllers/paymentController.js'
 
 const subscriptionRouter = express.Router()
 
@@ -58,6 +59,9 @@ subscriptionRouter.post(
  *       200:
  *         description: Checkout session created successfully.
  */
+subscriptionRouter.get('/payment-provider', protect, getPaymentProvider)
+subscriptionRouter.post('/create-checkout-session', protect, createCheckoutSession)
+
 /**
  * @swagger
  * /v1/subscription/create-charge:

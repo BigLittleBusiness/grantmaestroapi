@@ -4,13 +4,38 @@ import base from '../models/base.js'
 import sendEmail from '../utils/mailHelper.js'
 const { User, Grant, Task } = base
 
+const findOwnedGrant = (grantId, organizationId) =>
+  Grant.findOne({
+    where: { organization_grant_id: grantId, organization_id: organizationId, is_deleted: 0 },
+  })
+
+const findOwnedTask = (taskId, organizationId) =>
+  Task.findOne({
+    where: { task_id: taskId, is_deleted: 0 },
+    include: [
+      {
+        model: Grant,
+        as: 'grant',
+        attributes: ['organization_grant_id', 'grant_title', 'organization_id'],
+        where: { organization_id: organizationId, is_deleted: 0 },
+        required: true,
+      },
+      {
+        model: User,
+        as: 'assigned_member',
+        attributes: ['first_name', 'middle_name', 'last_name', 'email'],
+        required: false,
+      },
+    ],
+  })
+
 // Helper: build full task email data
 const buildTaskEmailData = (taskInfo, assignedTeamMember, relatedGrant) => {
   const assignedTo = `${assignedTeamMember?.first_name || ''} ${assignedTeamMember?.last_name || ''}`.trim()
   const priorityClass = taskInfo.task_priority === 'high' ? 'high' : taskInfo.task_priority === 'medium' ? 'medium' : ''
   const loginUrl = process.env.FRONTEND_URL + '/login'
   const taskUrl = process.env.FRONTEND_URL + '/tasks'
-  const grantUrl = process.env.FRONTEND_URL + '/grants/' + taskInfo.organization_grant_id
+  const grantUrl = process.env.FRONTEND_URL + '/grant/details/' + taskInfo.organization_grant_id
   return {
     assignedTo,
     grantTitle: relatedGrant.grant_title,
@@ -42,6 +67,17 @@ export const assignTask = asyncHandler(async (req, res, next) => {
     targeted_completion_date,
     task_priority,
   } = req.body
+  const ownedGrant = await findOwnedGrant(grant_id, req.user.organization_id)
+  if (!ownedGrant) {
+    return res.status(404).json({ status: false, message: 'Grant not found.', data: {} })
+  }
+  const assignee = await User.findOne({
+    where: { user_id: task_assigned_to, organization_id: req.user.organization_id, is_deleted: 0 },
+  })
+  if (!assignee) {
+    return res.status(422).json({ status: false, message: 'Please select a team member from your organisation.', data: {} })
+  }
+
   const taskObj = {
     task_description,
     task_assigned_to,
@@ -96,6 +132,10 @@ export const assignTask = asyncHandler(async (req, res, next) => {
  */
 export const updateTask = asyncHandler(async (req, res, next) => {
   const taskId = req.params.task_id
+  const existingTask = await findOwnedTask(taskId, req.user.organization_id)
+  if (!existingTask) {
+    return res.status(404).json({ status: false, message: 'Task not found.', data: {} })
+  }
   const {
     task_description,
     task_status,
@@ -104,6 +144,17 @@ export const updateTask = asyncHandler(async (req, res, next) => {
     grant_id,
     task_priority,
   } = req.body
+
+  const ownedGrant = await findOwnedGrant(grant_id, req.user.organization_id)
+  if (!ownedGrant) {
+    return res.status(422).json({ status: false, message: 'Please select a grant from your organisation.', data: {} })
+  }
+  const assignee = await User.findOne({
+    where: { user_id: task_assigned_to, organization_id: req.user.organization_id, is_deleted: 0 },
+  })
+  if (!assignee) {
+    return res.status(422).json({ status: false, message: 'Please select a team member from your organisation.', data: {} })
+  }
 
   await Task.update(
     {
@@ -144,7 +195,7 @@ export const updateTask = asyncHandler(async (req, res, next) => {
   // If task is now completed, notify the org admin
   if (task_status === 'completed') {
     const orgAdmin = await User.findOne({
-      where: { organization_id: relatedGrant.organization_id, user_type: 2, is_deleted: 0 },
+      where: { organization_id: relatedGrant.organization_id, user_type: 1, is_deleted: 0 },
       attributes: ['email', 'first_name'],
     })
     if (orgAdmin) {
@@ -157,7 +208,7 @@ export const updateTask = asyncHandler(async (req, res, next) => {
           grantTitle: relatedGrant.grant_title,
           task_description: taskInfo.task_description,
           completedDate: new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }),
-          grantUrl: process.env.FRONTEND_URL + '/grants/' + taskInfo.organization_grant_id,
+          grantUrl: process.env.FRONTEND_URL + '/grant/details/' + taskInfo.organization_grant_id,
           loginUrl: process.env.FRONTEND_URL + '/login',
           recipientEmail: orgAdmin.email,
           year: new Date().getFullYear(),
@@ -195,6 +246,13 @@ export const updateTask = asyncHandler(async (req, res, next) => {
 export const updateTaskStatus = asyncHandler(async (req, res, next) => {
   const taskId = req.params.task_id
   const { task_status } = req.body
+  const task = await findOwnedTask(taskId, req.user.organization_id)
+  if (!task) {
+    return res.status(404).json({ status: false, message: 'Task not found.', data: {} })
+  }
+  if (req.user.user_type !== 1 && Number(task.task_assigned_to) !== Number(req.user.user_id)) {
+    return res.status(403).json({ status: false, message: 'You can only update tasks assigned to you.' })
+  }
   await Task.update(
     { task_status, modified_at: new Date() },
     { where: { task_id: taskId } }
@@ -214,7 +272,7 @@ export const updateTaskStatus = asyncHandler(async (req, res, next) => {
       const assignedTeamMember = taskInfo.assigned_member?.dataValues || {}
       const completedBy = `${assignedTeamMember?.first_name || ''} ${assignedTeamMember?.last_name || ''}`.trim() || 'A team member'
       const orgAdmin = await User.findOne({
-        where: { organization_id: relatedGrant.organization_id, user_type: 2, is_deleted: 0 },
+        where: { organization_id: relatedGrant.organization_id, user_type: 1, is_deleted: 0 },
         attributes: ['email'],
       })
       if (orgAdmin) {
@@ -227,7 +285,7 @@ export const updateTaskStatus = asyncHandler(async (req, res, next) => {
             grantTitle: relatedGrant.grant_title,
             task_description: taskInfo.task_description,
             completedDate: new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }),
-            grantUrl: process.env.FRONTEND_URL + '/grants/' + taskInfo.organization_grant_id,
+            grantUrl: process.env.FRONTEND_URL + '/grant/details/' + taskInfo.organization_grant_id,
             loginUrl: process.env.FRONTEND_URL + '/login',
             recipientEmail: orgAdmin.email,
             year: new Date().getFullYear(),
@@ -251,7 +309,7 @@ export const fetchTaskList = asyncHandler(async (req, res, next) => {
   const organizationId = req.user.organization_id
   const userType = req.user.user_type
 
-  let findCond = { is_blocked: 0 }
+  let findCond = { is_blocked: 0, is_deleted: 0 }
   if (userType == 3 || userType == 4) {
     findCond.task_assigned_to = userId
   }
@@ -298,16 +356,14 @@ export const fetchTaskList = asyncHandler(async (req, res, next) => {
  */
 export const getTaskDetails = asyncHandler(async (req, res, next) => {
   const taskId = req.params.task_id
-  let findCond = { is_blocked: 0, task_id: taskId }
+  const taskdata = await findOwnedTask(taskId, req.user.organization_id)
+  if (!taskdata) {
+    return res.status(404).json({ status: false, message: 'Task not found.', data: {} })
+  }
+  if (req.user.user_type !== 1 && Number(taskdata.task_assigned_to) !== Number(req.user.user_id)) {
+    return res.status(403).json({ status: false, message: 'You do not have permission to view this task.' })
+  }
 
-  const taskdata = await Task.findOne({
-    attributes: ['task_id', 'task_description', 'task_status', 'task_priority', 'targeted_completion_date', 'task_start_date', 'task_assigned_to', 'organization_grant_id'],
-    where: findCond,
-    include: [
-      { model: Grant, as: 'grant', attributes: ['grant_title'], required: true },
-      { model: User, as: 'assigned_member', attributes: ['first_name', 'middle_name', 'last_name', 'email'], required: false },
-    ],
-  })
   const task = {
     task_id: taskdata.task_id,
     task_description: taskdata.task_description,
@@ -332,7 +388,14 @@ export const getTaskDetails = asyncHandler(async (req, res, next) => {
  */
 export const removeTask = asyncHandler(async (req, res, next) => {
   const taskId = req.params.task_id
-  await Task.update({ is_deleted: 1, deleted_at: new Date() }, { where: { task_id: taskId } })
+  const task = await findOwnedTask(taskId, req.user.organization_id)
+  if (!task) {
+    return res.status(404).json({ status: false, message: 'Task not found.', data: {} })
+  }
+  await Task.update(
+    { is_deleted: 1, deleted_at: new Date() },
+    { where: { task_id: taskId } }
+  )
   res.send({ status: true, message: 'Task removed successfully', data: {} })
 })
 
@@ -343,6 +406,10 @@ export const removeTask = asyncHandler(async (req, res, next) => {
  */
 export const fetchGrantRelatedTaskList = asyncHandler(async (req, res, next) => {
   const grantId = req.params.grant_id
+  const ownedGrant = await findOwnedGrant(grantId, req.user.organization_id)
+  if (!ownedGrant) {
+    return res.status(404).json({ status: false, message: 'Grant not found.', data: {} })
+  }
   const userId = req.user.user_id
   const userRole = req.user.user_type
   if (userRole == 3 || userRole == 4) {
@@ -352,7 +419,7 @@ export const fetchGrantRelatedTaskList = asyncHandler(async (req, res, next) => 
     }
   }
   const taskList = await Task.findAll({
-    where: { organization_grant_id: grantId },
+    where: { organization_grant_id: grantId, is_deleted: 0 },
     include: [
       { model: Grant, as: 'grant', attributes: ['grant_title'], required: true },
       { model: User, as: 'assigned_member', attributes: ['first_name', 'middle_name', 'last_name', 'email'], required: false },

@@ -228,14 +228,14 @@ export const getPlatformStats = asyncHandler(async (req, res) => {
     Organization.count({ where: { is_deleted: 0 } }),
     User.count({
       where: {
-        user_type: 2,
+        user_type: 1,
         is_deleted: 0,
         subscription_expiry_date: { [Op.gte]: today },
       },
     }).catch(() => 0),
     User.count({
       where: {
-        user_type: 2,
+        user_type: 1,
         is_deleted: 0,
         subscription_expiry_date: { [Op.lt]: today },
       },

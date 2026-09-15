@@ -1,75 +1,83 @@
-import CommonHelper from './commonHelper.js'
-//need to define the user role access on every route patha key
+// Canonical GrantMaestro role policy.
+// 1 = Organisation Admin, 2 = Platform Super Admin,
+// 3 = Team Member, 4 = Acquittal Contributor.
+export const ROLE = Object.freeze({
+  ORGANISATION_ADMIN: 1,
+  PLATFORM_SUPER_ADMIN: 2,
+  TEAM_MEMBER: 3,
+  ACQUITTAL_CONTRIBUTOR: 4,
+})
+
+const organisationUsers = [
+  ROLE.ORGANISATION_ADMIN,
+  ROLE.TEAM_MEMBER,
+  ROLE.ACQUITTAL_CONTRIBUTOR,
+]
+const organisationAdministrators = [ROLE.ORGANISATION_ADMIN]
+const platformAdministrators = [ROLE.PLATFORM_SUPER_ADMIN]
+const allAuthenticatedUsers = [...organisationUsers, ROLE.PLATFORM_SUPER_ADMIN]
+
+// The first path component after each route prefix is used by auth middleware.
+// Keep this list explicit: an unlisted protected route fails closed.
 const routePathAccessUserTypes = {
-  dashboard: [1, 2, 3, 4],
-  'change-password': [1, 2, 3],
-  'member-add': [2],
-  'member-update': [2],
-  'member-list': [1, 2, 3],
-  'member-details': [2],
-  'member-view': [1, 2],
-  'member-remove': [1, 2],
-  'profile-view': [1, 2, 3],
-  'profile-update': [1, 2, 3],
-  'grant-add': [2],
-  'grant-update': [2],
-  'grant-list': [1, 2, 3, 4],
-  'grant-details': [2, 3, 4],
-  'grant-notes-manage': [2, 3],
-  'grant-report-manage': [2],
-  'grant-report-remove': [2],
-  'grant-expense-manage': [2],
-  'grant-expense-remove': [2],
-  'task-assign': [2],
-  'task-list': [1, 2, 3, 4],
-  'task-details': [2, 3, 4],
-  'task-status-update': [2, 3],
-  'task-update': [2],
-  'task-remove': [2],
-  'grant-task-list': [2, 3, 4],
-  'ticket-list': [1, 2, 3],
-  'ticket-detail': [1, 2, 3],
-  'ticket-manage': [2, 3],
-  'ticket-remove': [2, 3],
-  'ticket-status-update': [1],
-  'create-checkout-session': [1, 2, 3, 4],
-  'create-subscription-plan': [1, 2, 3, 4],
-  'update-subscription-expiry-date': [1],
-  'manage-grant-category': [1],
-  'calendar-events': [1, 2, 3, 4],
-  'grant-category-list': [1, 2, 3, 4],
-  'organization-list': [1],
-  // Pin Payments System Admin settings
-  'pin-settings': [1],
-  // Subscription charge (all authenticated users) and webhook (public, no auth)
-  'create-charge': [1, 2, 3, 4],
-  'logout': [1, 2, 3, 4],
+  dashboard: organisationUsers,
+  'change-password': allAuthenticatedUsers,
+  'force-password-reset': allAuthenticatedUsers,
+  'member-add': organisationAdministrators,
+  'member-update': organisationAdministrators,
+  'member-list': organisationAdministrators,
+  'member-details': organisationAdministrators,
+  'member-view': organisationAdministrators,
+  'member-remove': organisationAdministrators,
+  'profile-view': allAuthenticatedUsers,
+  'profile-update': allAuthenticatedUsers,
+  'grant-add': organisationAdministrators,
+  'grant-update': organisationAdministrators,
+  'grant-list': organisationUsers,
+  'grant-details': organisationUsers,
+  'grant-notes-manage': organisationUsers,
+  'grant-report-manage': organisationUsers,
+  'grant-report-remove': organisationAdministrators,
+  'grant-expense-manage': organisationUsers,
+  'grant-expense-remove': organisationAdministrators,
+  'task-assign': organisationAdministrators,
+  'task-list': organisationUsers,
+  'task-details': organisationUsers,
+  'task-status-update': organisationUsers,
+  'task-update': organisationAdministrators,
+  'task-remove': organisationAdministrators,
+  'grant-task-list': organisationUsers,
+  'ticket-list': organisationUsers,
+  'ticket-detail': organisationUsers,
+  'ticket-manage': organisationUsers,
+  'ticket-remove': organisationUsers,
+  'ticket-status-update': platformAdministrators,
+  'payment-provider': organisationAdministrators,
+  'create-checkout-session': organisationAdministrators,
+  'create-charge': organisationAdministrators,
+  'manage-grant-category': platformAdministrators,
+  'grant-category-list': organisationUsers,
+  'calendar-events': organisationUsers,
+  'organization-list': platformAdministrators,
+  suitability: organisationUsers,
+  'task-description': organisationUsers,
+  'draft-note': organisationUsers,
+  logout: allAuthenticatedUsers,
+
+  // Platform configuration and subscription administration.
+  'pin-settings': platformAdministrators,
+  'stripe-settings': platformAdministrators,
+  'email-settings': platformAdministrators,
+  'platform-stats': platformAdministrators,
+  plans: platformAdministrators,
+  'promo-codes': platformAdministrators,
 }
 
-//check the user type have the access or not for this sections
-export const validateRouteAccess = async (routePath = '', userType = 0) => {
-  var isAccessValidate = false
-  if (userType > 0 && routePath.length > 0) {
-    // console.log(" userType :: ",userType)
-    // console.log(" routePath :: ",routePath)
-    let count = await CommonHelper.countStringOccurance(routePath, '/')
-    if (count > 0) {
-      const filteredRoutePath = routePath.split('/')
-      routePath = filteredRoutePath[0]
-    }
-    if (routePathAccessUserTypes.hasOwnProperty(routePath)) {
-      let allowedUserTypes = routePathAccessUserTypes[routePath]
-      if (
-        Array.isArray(allowedUserTypes) &&
-        allowedUserTypes.indexOf(userType) != -1
-      ) {
-        isAccessValidate = true
-      }
-    } else {
-      console.log('Route Path not define')
-    }
-  }
-  return isAccessValidate
+export const validateRouteAccess = (routePath = '', userType = 0) => {
+  if (!userType || !routePath) return false
+  const key = routePath.split('/')[0]
+  const allowedUserTypes = routePathAccessUserTypes[key]
+  return Array.isArray(allowedUserTypes) && allowedUserTypes.includes(Number(userType))
 }
 
-//export the details
+export default routePathAccessUserTypes

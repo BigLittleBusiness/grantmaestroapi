@@ -30,6 +30,17 @@ export const signup = asyncHandler(async (req, res, next) => {
       message: 'Email already exist.',
     })
   }
+  // Validate the requested plan before creating organisation data, so failed
+  // registrations do not leave orphaned tenant records behind.
+  const planInfo = await SubscriptionPlans.findOne({
+    where: { plan_id: preferred_subscription_plan_id, is_deleted: 0 },
+  })
+  if (!planInfo) {
+    return res.send({
+      status: false,
+      message: 'Selected subscription plan does not exist',
+    })
+  }
   const orgObj = {
     organization_name: organization_name || '',
     abn_no: '',
@@ -40,16 +51,7 @@ export const signup = asyncHandler(async (req, res, next) => {
     modified_at: new Date(),
   }
   const Org = await Organization.create(orgObj)
-  //check trial days for preferred subscription plan
-  const planInfo = await SubscriptionPlans.findOne({
-    where: { plan_id: preferred_subscription_plan_id, is_deleted: 0 },
-  })
-  if (!planInfo) {
-    return res.send({
-      status: false,
-      message: 'Selected subscription plan does not exist',
-    })
-  }
+
   const nextDate = new Date().setDate(
     new Date().getDate() + planInfo.trial_days
   )
@@ -65,7 +67,9 @@ export const signup = asyncHandler(async (req, res, next) => {
     first_name: first_name || '',
     middle_name: '',
     last_name: last_name || '',
-    user_type: 2,
+    // Public registration must always establish an organisation-level admin.
+    // Platform Super Admin accounts are created only through controlled setup.
+    user_type: 1,
     organization_id: Org.organization_id,
     created_at: new Date(),
     modified_at: new Date(),
@@ -125,8 +129,8 @@ export const verifyOtp = asyncHandler(async (req, res, next) => {
     { refresh_token: refreshToken, is_valid_refresh_token: true },
     { where: { user_id: user.user_id } }
   )
-  res.cookie('refreshToken', refreshToken, { httpOnly: true, secure: false, sameSite: 'Lax', maxAge: 7 * 24 * 60 * 60 * 1000 })
-  res.cookie('accessToken', accessToken, { httpOnly: true, secure: false, sameSite: 'Lax', maxAge: 30 * 60 * 1000 })
+  res.cookie('refreshToken', refreshToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 7 * 24 * 60 * 60 * 1000 })
+  res.cookie('accessToken', accessToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 30 * 60 * 1000 })
 
   // Send welcome email now that account is verified
   sendEmail(
@@ -292,14 +296,14 @@ export const login = asyncHandler(async (req, res, next) => {
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
-    secure: false,
-    sameSite: 'Lax',
+    secure: true,
+    sameSite: 'None',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   })
   res.cookie('accessToken', accessToken, {
     httpOnly: true,
-    secure: false,
-    sameSite: 'Lax',
+    secure: true,
+    sameSite: 'None',
     maxAge: 30 * 60 * 1000,
   })
   res.json({
@@ -377,10 +381,13 @@ export const forgotPassword = asyncHandler(async (req, res, next) => {
   let user = await User.findOne({
     where: { email: email, is_deleted: 0 },
   })
+  // Always acknowledge the request in the same way so this endpoint cannot
+  // be used to discover which email addresses have GrantMaestro accounts.
   if (!user) {
-    return res.send({
-      status: false,
-      message: 'This email is not registered with us.',
+    return res.status(200).json({
+      status: true,
+      message: 'If an account exists for this email address, password reset instructions will be sent shortly.',
+      data: {},
     })
   }
   const currentDate = moment(new Date()).format('YYYY-MM-DD')
@@ -434,10 +441,10 @@ export const forgotPassword = asyncHandler(async (req, res, next) => {
     null
   )
 
-  res.send({
+  res.status(200).json({
     status: true,
-    message: 'A reset password link has been sent to your registered email.',
-    data: { url },
+    message: 'If an account exists for this email address, password reset instructions will be sent shortly.',
+    data: {},
   })
 })
 
@@ -468,7 +475,11 @@ export const resetPassword = asyncHandler(async (req, res, next) => {
   await User.update(
     {
       reset_password_otp: '',
+      reset_password_attempted: 0,
       password: bcrypt.hashSync(decodedPass, 8),
+      requires_password_reset: 0,
+      refresh_token: null,
+      is_valid_refresh_token: false,
     },
     {
       where: {
@@ -481,6 +492,53 @@ export const resetPassword = asyncHandler(async (req, res, next) => {
   res.send({
     status: true,
     message: 'Password updated successfully.',
+    data: {},
+  })
+})
+
+/**
+ * @description Set a personal password for an invited user before first access
+ * @route POST /auth/force-password-reset
+ * @access Private
+ */
+export const forcePasswordReset = asyncHandler(async (req, res) => {
+  if (!req.user.requires_password_reset) {
+    return res.status(409).json({
+      status: false,
+      message: 'A forced password reset is not required for this account.',
+    })
+  }
+
+  const { new_password } = req.body
+  let decodedNewPassword
+  try {
+    decodedNewPassword = atob(new_password)
+  } catch (_error) {
+    return res.status(422).json({ status: false, message: 'Invalid password payload.' })
+  }
+  if (decodedNewPassword.length < 8) {
+    return res.status(422).json({
+      status: false,
+      message: 'Password must be at least 8 characters long.',
+    })
+  }
+
+  await User.update(
+    {
+      password: bcrypt.hashSync(decodedNewPassword, 8),
+      requires_password_reset: 0,
+      refresh_token: null,
+      is_valid_refresh_token: false,
+      modified_at: new Date(),
+    },
+    { where: { user_id: req.user.user_id } }
+  )
+
+  res.clearCookie('accessToken', { httpOnly: true, secure: true, sameSite: 'None' })
+  res.clearCookie('refreshToken', { httpOnly: true, secure: true, sameSite: 'None' })
+  return res.status(200).json({
+    status: true,
+    message: 'Password set successfully. Please sign in with your new password.',
     data: {},
   })
 })
@@ -769,24 +827,16 @@ export const subscriptionExpiryDate = asyncHandler(async (req, res) => {
  * @returns {Object} Response with status and success message
  */
 export const logout = asyncHandler(async (req, res) => {
-  const refreshToken = req.cookies.refreshToken
+  // Invalidate the server-side session flag for the authenticated account. The
+  // auth middleware checks this flag on every protected request, so an access
+  // token captured before logout cannot continue to call the API.
+  await User.update(
+    { refresh_token: null, is_valid_refresh_token: false },
+    { where: { user_id: req.user.user_id } }
+  )
 
-  // Invalidate the refresh token in the database so it cannot be reused
-  // even if someone still holds the cookie value.
-  if (refreshToken) {
-    try {
-      const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET)
-      await User.update(
-        { refresh_token: null, is_valid_refresh_token: false },
-        { where: { user_id: decoded.id } }
-      )
-    } catch (_err) {
-      // Token may already be expired — still clear cookies below.
-    }
-  }
-
-  res.clearCookie('accessToken', { httpOnly: true, secure: false, sameSite: 'Lax' })
-  res.clearCookie('refreshToken', { httpOnly: true, secure: false, sameSite: 'Lax' })
+  res.clearCookie('accessToken', { httpOnly: true, secure: true, sameSite: 'None' })
+  res.clearCookie('refreshToken', { httpOnly: true, secure: true, sameSite: 'None' })
   res.json({ success: true, message: 'Logged out successfully' })
 })
 
@@ -821,8 +871,8 @@ export const refreshTokenValidation = asyncHandler(async (req, res) => {
 
     res.cookie('accessToken', newAccessToken, {
       httpOnly: true,
-      secure: false,
-      sameSite: 'Lax',
+      secure: true,
+      sameSite: 'None',
       maxAge: 30 * 60 * 1000,
     })
     res.json({ success: true, message: 'Access token refreshed successfully' })

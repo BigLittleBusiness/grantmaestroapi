@@ -46,6 +46,10 @@ app.use('/v1/auth/forgot-password', authLimiter)
 app.use('/v1/auth/reset-password', authLimiter)
 app.use('/v1', apiLimiter)
 
+// Stripe signs the exact raw request payload, so this route must be registered
+// before express.json() parses the body.
+app.post('/v1/subscription/stripe-webhook', express.raw({ type: 'application/json' }), paymentWebhook)
+
 // Files are now served from Amazon S3 — local /uploads static middleware removed.
 app.use(
   express.json({
@@ -58,15 +62,24 @@ app.use(express.urlencoded({ extended: true }))
 
 // CORS origins are loaded from CORS_ORIGINS in config.env (comma-separated).
 // Example: CORS_ORIGINS=http://localhost:3000,https://grantmaestro.com
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
-  .split(',')
-  .map((o) => o.trim())
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  ...(process.env.CORS_ORIGINS || 'http://localhost:3000').split(','),
+]
+  .map((origin) => origin?.trim())
   .filter(Boolean)
+
+const normaliseOrigin = (origin) => origin
+  .replace(/:80$/, '')
+  .replace(/:443$/, '')
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (e.g. mobile apps, curl, Postman)
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (e.g. server-to-server webhooks and curl).
+    const originAllowed = origin && allowedOrigins.some(
+      (allowedOrigin) => normaliseOrigin(allowedOrigin) === normaliseOrigin(origin)
+    )
+    if (!origin || originAllowed) {
       callback(null, true)
     } else {
       callback(new Error(`CORS: origin '${origin}' is not allowed`))
@@ -86,7 +99,6 @@ app.get('/api/health', (req, res) => {
   })
 })
 app.use('/v1', grantMaestroRouter)
-app.post('/webhook', paymentWebhook)
 
 app.use(errorHandler)
 

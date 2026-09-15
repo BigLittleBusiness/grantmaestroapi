@@ -12,32 +12,13 @@
  */
 import asyncHandler from '../middlewares/async.js'
 import axios from 'axios'
-import crypto from 'crypto'
 import base from '../models/base.js'
+import { encryptSetting, decryptSetting } from '../utils/settingsCrypto.js'
 const { SystemSettings } = base
-
-// ─── Encryption helpers (same key/IV as pinPaymentController) ────────────────
-const ALGORITHM = 'aes-256-cbc'
-const ENC_KEY = process.env.SETTINGS_ENCRYPTION_KEY || 'g6ZOpvHQ78X4PbLzmU5eErPRtdh6mAXp'
-const ENC_IV  = process.env.SETTINGS_ENCRYPTION_IV  || 'o6SG75PDEbNTBYJV'
-
-const encryptValue = (text) => {
-  const cipher = crypto.createCipheriv(ALGORITHM, ENC_KEY, ENC_IV)
-  let enc = cipher.update(text, 'utf8', 'hex')
-  enc += cipher.final('hex')
-  return enc
-}
-
-const decryptValue = (text) => {
-  const decipher = crypto.createDecipheriv(ALGORITHM, ENC_KEY, ENC_IV)
-  let dec = decipher.update(text, 'hex', 'utf8')
-  dec += decipher.final('utf8')
-  return dec
-}
 
 const upsertSetting = async (key, value, isEncrypted = false) => {
   const existing = await SystemSettings.findOne({ where: { setting_key: key, is_deleted: 0 } })
-  const storedValue = isEncrypted ? encryptValue(value) : value
+  const storedValue = isEncrypted ? encryptSetting(value) : value
   if (existing) {
     await existing.update({ setting_value: storedValue, is_encrypted: isEncrypted ? 1 : 0 })
   } else {
@@ -48,17 +29,18 @@ const upsertSetting = async (key, value, isEncrypted = false) => {
 const getSetting = async (key) => {
   const row = await SystemSettings.findOne({ where: { setting_key: key, is_deleted: 0 } })
   if (!row) return null
-  return row.is_encrypted ? decryptValue(row.setting_value) : row.setting_value
+  return row.is_encrypted ? decryptSetting(row.setting_value) : row.setting_value
 }
 
 // ─── GET /v1/admin/stripe-settings/fetch ────────────────────────────────────
 export const fetchStripeSettings = asyncHandler(async (req, res) => {
-  const [publishableKey, environment, currency, hasSecret, hasWebhookSecret] = await Promise.all([
+  const [publishableKey, environment, currency, hasSecret, hasWebhookSecret, enabled] = await Promise.all([
     getSetting('stripe_publishable_key'),
     getSetting('stripe_environment'),
     getSetting('stripe_currency'),
     getSetting('stripe_secret_key'),
     getSetting('stripe_webhook_secret'),
+    getSetting('stripe_enabled'),
   ])
 
   res.status(200).json({
@@ -70,6 +52,7 @@ export const fetchStripeSettings = asyncHandler(async (req, res) => {
       // Never return actual secret values to the browser — just indicate presence
       stripe_secret_key:      hasSecret        ? '••••••••' : '',
       stripe_webhook_secret:  hasWebhookSecret ? '••••••••' : '',
+      stripe_enabled:         enabled === 'true' || enabled === true || enabled === '1',
     },
   })
 })
@@ -82,7 +65,17 @@ export const saveStripeSettings = asyncHandler(async (req, res) => {
     stripe_environment,
     stripe_currency,
     stripe_webhook_secret,
+    stripe_enabled,
   } = req.body
+
+  const enableStripe = stripe_enabled === true || stripe_enabled === 'true' || stripe_enabled === 1 || stripe_enabled === '1'
+  if (enableStripe) {
+    const existingSecret = await getSetting('stripe_secret_key')
+    const hasNewSecret = stripe_secret_key && !stripe_secret_key.startsWith('•')
+    if (!hasNewSecret && !existingSecret) {
+      return res.status(400).json({ success: false, message: 'Save a valid Stripe secret key before activating Stripe checkout.' })
+    }
+  }
 
   if (stripe_publishable_key !== undefined)
     await upsertSetting('stripe_publishable_key', stripe_publishable_key, false)
@@ -94,6 +87,8 @@ export const saveStripeSettings = asyncHandler(async (req, res) => {
     await upsertSetting('stripe_secret_key', stripe_secret_key, true)
   if (stripe_webhook_secret && !stripe_webhook_secret.startsWith('•'))
     await upsertSetting('stripe_webhook_secret', stripe_webhook_secret, true)
+  if (stripe_enabled !== undefined)
+    await upsertSetting('stripe_enabled', enableStripe ? 'true' : 'false', false)
 
   res.status(200).json({ success: true, message: 'Stripe settings saved successfully.' })
 })
