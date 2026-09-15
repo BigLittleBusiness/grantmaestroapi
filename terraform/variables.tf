@@ -81,6 +81,18 @@ variable "uat_desired_count" {
   default     = 1
 }
 
+variable "ecr_keep_tagged_images" {
+  type        = number
+  description = "Number of recent tagged backend images to retain in ECR."
+  default     = 10
+}
+
+variable "ecr_untagged_image_expire_days" {
+  type        = number
+  description = "Number of days to keep untagged backend images in ECR."
+  default     = 7
+}
+
 variable "task_cpu" {
   type        = number
   description = "CPU units for ECS tasks."
@@ -139,6 +151,24 @@ variable "db_instance_class" {
   type        = string
   description = "RDS instance class."
   default     = "db.t4g.micro"
+}
+
+variable "db_instance_identifier" {
+  type        = string
+  description = "Optional explicit RDS DB instance identifier for this workspace. Defaults to <project>-<environment>-db."
+  default     = ""
+}
+
+variable "shared_rds_instance_identifier" {
+  type        = string
+  description = "Optional explicit shared RDS DB instance identifier used by production."
+  default     = ""
+}
+
+variable "db_engine_version" {
+  type        = string
+  description = "RDS MySQL engine version."
+  default     = "8.4.11"
 }
 
 variable "db_allocated_storage" {

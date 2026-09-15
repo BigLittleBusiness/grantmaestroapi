@@ -102,6 +102,11 @@ Terraform files for each environment live in:
 
 The backend stack manages ECS, ECR, RDS, Redis, Secrets Manager app config, ALB listeners/rules, S3 app storage, ACM validation, and API DNS records.
 
+Cost-control defaults:
+
+- UAT uses `desired_count = 0` for the legacy `grantmaestro-uat-prod` service; only `grantmaestro-uat-uat` should run in the UAT cluster.
+- Backend ECR lifecycle keeps the latest 10 tagged images and expires untagged images after 7 days.
+
 ### Backend Deploy
 
 ```bash

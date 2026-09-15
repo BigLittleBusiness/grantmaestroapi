@@ -8,7 +8,13 @@ locals {
   use_shared_rds_alb = local.is_prod
   name_prefix        = "${var.project_name}-${var.environment}"
   shared_name_prefix = "${var.project_name}-${var.shared_infra_owner_environment}"
-  azs                = slice(data.aws_availability_zones.available.names, 0, 2)
+  db_identifier      = var.db_instance_identifier != "" ? var.db_instance_identifier : "${local.name_prefix}-db"
+  shared_db_identifier = (
+    var.shared_rds_instance_identifier != ""
+    ? var.shared_rds_instance_identifier
+    : "${local.shared_name_prefix}-db"
+  )
+  azs = slice(data.aws_availability_zones.available.names, 0, 2)
   tags = {
     Project     = var.project_name
     Environment = var.environment
