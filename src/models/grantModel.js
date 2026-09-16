@@ -129,6 +129,18 @@ export default (sequelize, Sequelize) => {
 
       account_used_for_expenses: { type: Sequelize.STRING, allowNull: true },
 
+      // Council workflow controls — explicitly separate record editing from lifecycle progression.
+      workflow_stage: { type: Sequelize.STRING(32), allowNull: false, defaultValue: 'opportunity' },
+      next_action: { type: Sequelize.TEXT, allowNull: true },
+      next_action_due_date: { type: Sequelize.DATEONLY, allowNull: true },
+      accountable_user_id: {
+        type: Sequelize.INTEGER(10).UNSIGNED,
+        allowNull: true,
+        references: { model: 'grant_users', key: 'user_id' },
+      },
+      risk_status: { type: Sequelize.STRING(32), allowNull: false, defaultValue: 'on_track' },
+      strategic_priority: { type: Sequelize.STRING(255), allowNull: true },
+
       grant_status: {
         type: Sequelize.ENUM(
           'applied',

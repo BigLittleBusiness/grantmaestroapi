@@ -22,6 +22,8 @@ import SupportTicketModel from './supportTicketModel.js'
 import GrantCategoryModel from './grantCategoryModel.js'
 import SystemSettingsModel from './systemSettingsModel.js'
 import PromoCodeModel from './promoCodeModel.js'
+import AcquittalItemModel from './acquittalItemModel.js'
+import TaskChecklistItemModel from './taskChecklistItemModel.js'
 
 //declear params
 const Op = Sequelize.Op
@@ -73,6 +75,8 @@ const SupportTickets = SupportTicketModel(sequelize, Sequelize)
 const GrantCategory = GrantCategoryModel(sequelize, Sequelize)
 const SystemSettings = SystemSettingsModel(sequelize, Sequelize)
 const PromoCode = PromoCodeModel(sequelize, Sequelize)
+const AcquittalItem = AcquittalItemModel(sequelize, Sequelize)
+const TaskChecklistItem = TaskChecklistItemModel(sequelize, Sequelize)
 
 User.belongsTo(UserRole, { foreignKey: 'user_type', as: 'user_role' })
 User.hasOne(Country, { foreignKey: 'country_id', as: 'country' })
@@ -87,6 +91,7 @@ User.hasOne(OrganizationDepartment, {
 })
 Grant.belongsTo(GrantCategory, { foreignKey: 'category_id', as: 'category' })
 Grant.belongsTo(Organization, { foreignKey: 'organization_id', as: 'organization' })
+Grant.belongsTo(User, { foreignKey: 'accountable_user_id', as: 'accountable_officer' })
 Organization.hasMany(Grant, { foreignKey: 'organization_id', as: 'grants' })
 Grant.hasMany(GrantProjects, {
   as: 'projects',
@@ -111,7 +116,13 @@ Grant.hasMany(GrantReports, {
 })
 Grant.hasMany(GrantNotes, { as: 'notes', foreignKey: 'organization_grant_id' })
 Grant.hasMany(Task, { as: 'tasks', foreignKey: 'organization_grant_id' })
+Grant.hasMany(AcquittalItem, { as: 'acquittal_items', foreignKey: 'organization_grant_id' })
+AcquittalItem.belongsTo(Grant, { foreignKey: 'organization_grant_id', as: 'grant' })
+AcquittalItem.belongsTo(User, { foreignKey: 'owner_user_id', as: 'owner' })
 Task.belongsTo(Grant, { foreignKey: 'organization_grant_id', as: 'grant' })
+Task.hasMany(TaskChecklistItem, { as: 'checklist_items', foreignKey: 'task_id' })
+TaskChecklistItem.belongsTo(Task, { foreignKey: 'task_id', as: 'task' })
+TaskChecklistItem.belongsTo(User, { foreignKey: 'completed_by_user_id', as: 'completed_by' })
 Task.belongsTo(User, { foreignKey: 'task_assigned_to', as: 'assigned_member' })
 User.hasMany(Task, { as: 'usertasklist', foreignKey: 'user_id' })
 GrantItemExpenses.belongsTo(User, {
@@ -129,6 +140,8 @@ SupportTickets.belongsTo(Organization, {
 
 export default {
   PromoCode,
+  AcquittalItem,
+  TaskChecklistItem,
   Op,
   seq,
   SystemSettings,

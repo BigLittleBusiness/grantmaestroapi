@@ -2,7 +2,7 @@ import asyncHandler from '../middlewares/async.js'
 import CommonHelper from '../utils/commonHelper.js'
 import base from '../models/base.js'
 import sendEmail from '../utils/mailHelper.js'
-const { User, Grant, Task } = base
+const { User, Grant, Task, TaskChecklistItem } = base
 
 const findOwnedGrant = (grantId, organizationId) =>
   Grant.findOne({
@@ -26,8 +26,34 @@ const findOwnedTask = (taskId, organizationId) =>
         attributes: ['first_name', 'middle_name', 'last_name', 'email'],
         required: false,
       },
+      {
+        model: TaskChecklistItem,
+        as: 'checklist_items',
+        attributes: ['task_checklist_item_id', 'item_text', 'is_complete', 'completed_at'],
+        required: false,
+      },
     ],
   })
+
+const normaliseChecklist = (items) => Array.isArray(items)
+  ? [...new Set(items.map((item) => String(item || '').trim()).filter(Boolean))].slice(0, 25)
+  : []
+
+const replaceChecklist = async (taskId, items) => {
+  if (!Array.isArray(items)) return
+  await TaskChecklistItem.update({ is_deleted: 1, modified_at: new Date() }, { where: { task_id: taskId, is_deleted: 0 } })
+  const checklist = normaliseChecklist(items)
+  if (checklist.length) {
+    await TaskChecklistItem.bulkCreate(checklist.map((item_text) => ({ task_id: taskId, item_text })))
+  }
+}
+
+const formatChecklist = (items = []) => items.map((item) => ({
+  id: item.task_checklist_item_id,
+  text: item.item_text,
+  is_complete: Boolean(item.is_complete),
+  completed_at: item.completed_at,
+}))
 
 // Helper: build full task email data
 const buildTaskEmailData = (taskInfo, assignedTeamMember, relatedGrant) => {
@@ -66,6 +92,13 @@ export const assignTask = asyncHandler(async (req, res, next) => {
     task_assigned_to,
     targeted_completion_date,
     task_priority,
+    task_status,
+    task_type,
+    grant_stage,
+    estimated_effort_hours,
+    dependency_note,
+    completion_evidence,
+    checklist_items,
   } = req.body
   const ownedGrant = await findOwnedGrant(grant_id, req.user.organization_id)
   if (!ownedGrant) {
@@ -84,13 +117,24 @@ export const assignTask = asyncHandler(async (req, res, next) => {
     targeted_completion_date: new Date(targeted_completion_date),
     organization_grant_id: grant_id,
     task_priority: task_priority || null,
+    task_status: task_status || 'assigned',
+    task_type: task_type || null,
+    grant_stage: grant_stage || null,
+    estimated_effort_hours: estimated_effort_hours || null,
+    dependency_note: dependency_note || null,
+    completion_evidence: completion_evidence || null,
   }
   const taskData = await Task.create(taskObj)
+  const checklist = normaliseChecklist(checklist_items)
+  if (checklist.length) {
+    await TaskChecklistItem.bulkCreate(checklist.map((item_text) => ({ task_id: taskData.task_id, item_text })))
+  }
   const taskInfo = await Task.findOne({
     where: { task_id: taskData.task_id },
     include: [
       { model: Grant, as: 'grant', attributes: ['grant_title'], required: true },
       { model: User, as: 'assigned_member', attributes: ['first_name', 'middle_name', 'last_name', 'email'], required: false },
+      { model: TaskChecklistItem, as: 'checklist_items', attributes: ['task_checklist_item_id', 'item_text', 'is_complete', 'completed_at'], required: false },
     ],
   })
   const assignedTeamMember = taskInfo.assigned_member.dataValues
@@ -114,6 +158,12 @@ export const assignTask = asyncHandler(async (req, res, next) => {
         description: taskInfo.task_description,
         status: taskInfo.task_status,
         priority: taskInfo.task_priority,
+        task_type: taskInfo.task_type,
+        grant_stage: taskInfo.grant_stage,
+        estimated_effort_hours: taskInfo.estimated_effort_hours,
+        dependency_note: taskInfo.dependency_note,
+        completion_evidence: taskInfo.completion_evidence,
+        checklist_items: formatChecklist(taskInfo.checklist_items),
         task_assigned_to_id: taskInfo.task_assigned_to,
         grant_id: taskInfo.organization_grant_id,
         assignedTo: assignedTo,
@@ -143,6 +193,12 @@ export const updateTask = asyncHandler(async (req, res, next) => {
     targeted_completion_date,
     grant_id,
     task_priority,
+    task_type,
+    grant_stage,
+    estimated_effort_hours,
+    dependency_note,
+    completion_evidence,
+    checklist_items,
   } = req.body
 
   const ownedGrant = await findOwnedGrant(grant_id, req.user.organization_id)
@@ -161,7 +217,12 @@ export const updateTask = asyncHandler(async (req, res, next) => {
       task_description,
       task_status,
       task_assigned_to,
-      task_priority: task_priority !== undefined ? task_priority : null,
+      task_priority: task_priority !== undefined ? task_priority || null : existingTask.task_priority,
+      task_type: task_type !== undefined ? task_type || null : existingTask.task_type,
+      grant_stage: grant_stage !== undefined ? grant_stage || null : existingTask.grant_stage,
+      estimated_effort_hours: estimated_effort_hours !== undefined ? estimated_effort_hours || null : existingTask.estimated_effort_hours,
+      dependency_note: dependency_note !== undefined ? dependency_note || null : existingTask.dependency_note,
+      completion_evidence: completion_evidence !== undefined ? completion_evidence || null : existingTask.completion_evidence,
       task_start_date: new Date(),
       targeted_completion_date: new Date(targeted_completion_date),
       task_completion_date: task_status === 'completed' ? new Date() : null,
@@ -170,11 +231,13 @@ export const updateTask = asyncHandler(async (req, res, next) => {
     },
     { where: { task_id: taskId } }
   )
+  await replaceChecklist(taskId, checklist_items)
   const taskInfo = await Task.findOne({
     where: { task_id: taskId },
     include: [
       { model: Grant, as: 'grant', attributes: ['grant_title', 'organization_id'], required: true },
       { model: User, as: 'assigned_member', attributes: ['first_name', 'middle_name', 'last_name', 'email'], required: false },
+      { model: TaskChecklistItem, as: 'checklist_items', attributes: ['task_checklist_item_id', 'item_text', 'is_complete', 'completed_at'], required: false },
     ],
   })
   const assignedTeamMember = taskInfo.assigned_member?.dataValues || {}
@@ -227,6 +290,12 @@ export const updateTask = asyncHandler(async (req, res, next) => {
         description: taskInfo.task_description,
         status: taskInfo.task_status,
         priority: taskInfo.task_priority,
+        task_type: taskInfo.task_type,
+        grant_stage: taskInfo.grant_stage,
+        estimated_effort_hours: taskInfo.estimated_effort_hours,
+        dependency_note: taskInfo.dependency_note,
+        completion_evidence: taskInfo.completion_evidence,
+        checklist_items: formatChecklist(taskInfo.checklist_items),
         task_assigned_to_id: taskInfo.task_assigned_to,
         grant_id: taskInfo.organization_grant_id,
         assignedTo: assignedTo,
@@ -245,7 +314,10 @@ export const updateTask = asyncHandler(async (req, res, next) => {
  */
 export const updateTaskStatus = asyncHandler(async (req, res, next) => {
   const taskId = req.params.task_id
-  const { task_status } = req.body
+  const { task_status, completion_evidence } = req.body
+  if (!['assigned', 'pending', 'inprogress', 'completed'].includes(task_status)) {
+    return res.status(422).json({ status: false, message: 'Please select a valid task status.' })
+  }
   const task = await findOwnedTask(taskId, req.user.organization_id)
   if (!task) {
     return res.status(404).json({ status: false, message: 'Task not found.', data: {} })
@@ -254,7 +326,12 @@ export const updateTaskStatus = asyncHandler(async (req, res, next) => {
     return res.status(403).json({ status: false, message: 'You can only update tasks assigned to you.' })
   }
   await Task.update(
-    { task_status, modified_at: new Date() },
+    {
+      task_status,
+      completion_evidence: completion_evidence !== undefined ? String(completion_evidence || '').trim() || null : task.completion_evidence,
+      task_completion_date: task_status === 'completed' ? new Date() : null,
+      modified_at: new Date(),
+    },
     { where: { task_id: taskId } }
   )
 
@@ -323,7 +400,7 @@ export const fetchTaskList = asyncHandler(async (req, res, next) => {
     findCond.task_status = req.query.task_status
   }
   const taskList = await Task.findAll({
-    attributes: ['task_id', 'task_description', 'task_status', 'task_priority', 'task_assigned_to', 'organization_grant_id', 'targeted_completion_date'],
+    attributes: ['task_id', 'task_description', 'task_status', 'task_priority', 'task_type', 'grant_stage', 'estimated_effort_hours', 'dependency_note', 'completion_evidence', 'task_assigned_to', 'organization_grant_id', 'targeted_completion_date'],
     where: findCond,
     include: [
       { model: Grant, as: 'grant', attributes: ['grant_title'], where: { organization_id: organizationId }, required: true },
@@ -335,6 +412,11 @@ export const fetchTaskList = asyncHandler(async (req, res, next) => {
     description: el.task_description,
     status: el.task_status,
     priority: el.task_priority,
+    task_type: el.task_type,
+    grant_stage: el.grant_stage,
+    estimated_effort_hours: el.estimated_effort_hours,
+    dependency_note: el.dependency_note,
+    completion_evidence: el.completion_evidence,
     task_assigned_to_id: el.task_assigned_to,
     targeted_completion_date: el.targeted_completion_date,
     task_assigned_to_name: el.assigned_member
@@ -369,6 +451,12 @@ export const getTaskDetails = asyncHandler(async (req, res, next) => {
     task_description: taskdata.task_description,
     task_status: taskdata.task_status,
     priority: taskdata.task_priority,
+    task_type: taskdata.task_type,
+    grant_stage: taskdata.grant_stage,
+    estimated_effort_hours: taskdata.estimated_effort_hours,
+    dependency_note: taskdata.dependency_note,
+    completion_evidence: taskdata.completion_evidence,
+    checklist_items: formatChecklist(taskdata.checklist_items),
     targeted_completion_date: taskdata.targeted_completion_date,
     task_start_date: taskdata.task_start_date,
     task_assigned_to_id: taskdata.task_assigned_to,
@@ -387,6 +475,9 @@ export const getTaskDetails = asyncHandler(async (req, res, next) => {
  * @access Private
  */
 export const removeTask = asyncHandler(async (req, res, next) => {
+  if (Number(req.user.user_type) !== 1) {
+    return res.status(403).json({ status: false, message: 'Only an Organisation Admin can delete a task.' })
+  }
   const taskId = req.params.task_id
   const task = await findOwnedTask(taskId, req.user.organization_id)
   if (!task) {
@@ -427,4 +518,40 @@ export const fetchGrantRelatedTaskList = asyncHandler(async (req, res, next) => 
     order: [['task_id', 'desc']],
   })
   res.send({ status: true, message: 'Task list', data: { tasks: taskList } })
+})
+
+/**
+ * Update a single shared checklist item. Assigned staff may complete only
+ * checklist work attached to their own task; Organisation Admins may update any.
+ */
+export const updateTaskChecklistItem = asyncHandler(async (req, res) => {
+  const { is_complete } = req.body
+  if (typeof is_complete !== 'boolean') {
+    return res.status(422).json({ status: false, message: 'Provide a checklist completion value.' })
+  }
+  const item = await TaskChecklistItem.findOne({
+    where: { task_checklist_item_id: req.params.item_id, is_deleted: 0 },
+    include: [{
+      model: Task,
+      as: 'task',
+      required: true,
+      include: [{
+        model: Grant,
+        as: 'grant',
+        where: { organization_id: req.user.organization_id, is_deleted: 0 },
+        required: true,
+      }],
+    }],
+  })
+  if (!item) return res.status(404).json({ status: false, message: 'Checklist item not found.' })
+  if (Number(req.user.user_type) !== 1 && Number(item.task.task_assigned_to) !== Number(req.user.user_id)) {
+    return res.status(403).json({ status: false, message: 'You can only update checklist items assigned to you.' })
+  }
+  await item.update({
+    is_complete,
+    completed_at: is_complete ? new Date() : null,
+    completed_by_user_id: is_complete ? req.user.user_id : null,
+    modified_at: new Date(),
+  })
+  res.json({ status: true, message: 'Checklist item updated.', data: { item: { id: item.task_checklist_item_id, is_complete: item.is_complete } } })
 })

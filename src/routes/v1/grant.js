@@ -13,6 +13,13 @@ import {
   manageGrantExpense,
   removeExpenseItem,
 } from '../../controllers/grantController.js'
+import {
+  getGrantWorkspace,
+  updateGrantControlPanel,
+  getAcquittalCentre,
+  initialiseAcquittalChecklist,
+  manageAcquittalItem,
+} from '../../controllers/councilWorkflowController.js'
 
 const grantRouter = express.Router()
 
@@ -158,6 +165,11 @@ grantRouter.get('/grant-list', protect, grantList)
  *         description: Unauthorized
  */
 grantRouter.get('/grant-details/:grant_id', protect, getGrantDetails)
+grantRouter.get('/workspace/:grant_id', protect, getGrantWorkspace)
+grantRouter.post('/workspace/:grant_id', protect, updateGrantControlPanel)
+grantRouter.get('/acquittals', protect, getAcquittalCentre)
+grantRouter.post('/acquittals/:grant_id/initialise', protect, initialiseAcquittalChecklist)
+grantRouter.post('/acquittals/items/manage', protect, manageAcquittalItem)
 
 /**
  * @swagger

@@ -323,12 +323,12 @@ export const login = asyncHandler(async (req, res, next) => {
  */
 export const generateAccessToken = asyncHandler(async (req, res, next) => {
   const cookies = req.cookies
-  if (!cookies?.jwt)
+  if (!cookies?.refreshToken)
     return res.status(401).json({
       success: false,
       message: 'Refresh token does not exist',
     })
-  const refreshToken = cookies.jwt
+  const refreshToken = cookies.refreshToken
   const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET)
   const user = await User.findOne({
     where: { user_id: decoded.id, refresh_token: refreshToken },

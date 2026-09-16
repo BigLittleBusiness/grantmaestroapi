@@ -209,7 +209,7 @@ export const validatePromoCode = asyncHandler(async (req, res) => {
  * Returns platform-wide metrics for the Sys Admin dashboard.
  */
 export const getPlatformStats = asyncHandler(async (req, res) => {
-  const { User, Organization, Grant, Task } = base
+  const { User, Organization, Grant, Task, SystemSettings } = base
 
   const today = new Date()
   const thirtyDaysAgo = new Date(today)
@@ -224,8 +224,9 @@ export const getPlatformStats = asyncHandler(async (req, res) => {
     totalTasks,
     newOrgsLast30Days,
     recentOrgs,
+    settings,
   ] = await Promise.all([
-    Organization.count({ where: { is_deleted: 0 } }),
+    Organization.count({ where: { is_deleted: 0, organization_name: { [Op.ne]: 'GrantMaestro Platform' } } }),
     User.count({
       where: {
         user_type: 1,
@@ -250,12 +251,25 @@ export const getPlatformStats = asyncHandler(async (req, res) => {
       },
     }).catch(() => 0),
     Organization.findAll({
-      where: { is_deleted: 0 },
+      where: { is_deleted: 0, organization_name: { [Op.ne]: 'GrantMaestro Platform' } },
       attributes: ['organization_id', 'organization_name', 'created_at'],
       order: [['created_at', 'DESC']],
       limit: 10,
     }),
+    SystemSettings.findAll({
+      attributes: ['setting_key', 'setting_value'],
+      where: { is_deleted: 0, is_blocked: 0 },
+    }),
   ])
+
+  const configuredKeys = new Set(settings.filter((setting) => String(setting.setting_value || '').trim()).map((setting) => setting.setting_key))
+  const integrationStatus = {
+    email: configuredKeys.has('ses_access_key_id') && configuredKeys.has('ses_secret_access_key') && configuredKeys.has('ses_from_email') ? 'configured' : 'needs_setup',
+    storage: process.env.AWS_S3_BUCKET && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ? 'configured' : 'needs_setup',
+    payment: configuredKeys.has('stripe_active') && configuredKeys.has('stripe_secret_key') ? 'stripe_active' : configuredKeys.has('pin_secret_key') ? 'pin_configured' : 'needs_setup',
+    ai: process.env.OPENAI_API_KEY ? 'configured' : 'needs_setup',
+    scheduled_notifications: configuredKeys.has('ses_access_key_id') && configuredKeys.has('ses_secret_access_key') && configuredKeys.has('ses_from_email') ? 'ready_when_data_due' : 'blocked_by_email',
+  }
 
   res.json({
     success: true,
@@ -268,6 +282,7 @@ export const getPlatformStats = asyncHandler(async (req, res) => {
       totalTasks,
       newOrgsLast30Days,
       recentOrgs,
+      integrationStatus,
     },
   })
 })

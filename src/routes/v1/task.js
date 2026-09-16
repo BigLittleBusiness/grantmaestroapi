@@ -12,6 +12,7 @@ import {
   removeTask,
   getTaskDetails,
   fetchGrantRelatedTaskList,
+  updateTaskChecklistItem,
 } from '../../controllers/taskController.js'
 
 /**
@@ -208,5 +209,6 @@ taskRouter.delete('/task-remove/:task_id', protect, removeTask)
  *         description: Unauthorized
  */
 taskRouter.get('/grant-task-list/:grant_id', protect, fetchGrantRelatedTaskList)
+taskRouter.post('/task-checklist-item/:item_id', protect, updateTaskChecklistItem)
 
 export default taskRouter
