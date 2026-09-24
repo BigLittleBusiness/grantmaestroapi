@@ -63,7 +63,7 @@ const createTransporter = (config) => {
  * When SES is not configured, delivery is skipped without interrupting product
  * workflows; the health check and Sys Admin status show that configuration is required.
  */
-async function sendEmail(to, subject, templateName, templateData = {}, attachment) {
+async function sendEmail(to, subject, templateName, templateData = {}, attachment, options = {}) {
   try {
     const config = await resolveMailConfig()
     if (!isMailConfigured(config)) {
@@ -85,13 +85,20 @@ async function sendEmail(to, subject, templateName, templateData = {}, attachmen
       ...templateData,
       logoUrl,
     })
+    const subjectWithoutLegacyBrand = subject
+      .replace(/\s*[—-]\s*Grant\s*Maestro\s*$/i, '')
+      .trim()
+    const brandedSubject = subjectWithoutLegacyBrand.startsWith('GrantMaestro - ')
+      ? subjectWithoutLegacyBrand
+      : `GrantMaestro - ${subjectWithoutLegacyBrand}`
 
     await email.send({
       template: templateName,
       message: {
         to,
-        subject,
+        subject: brandedSubject,
         html: renderedEmail,
+        replyTo: options.replyTo,
         attachments: attachment ? [attachment] : [],
       },
       locals: templateData,

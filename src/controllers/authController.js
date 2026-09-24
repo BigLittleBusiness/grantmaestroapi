@@ -88,6 +88,7 @@ export const signup = asyncHandler(async (req, res, next) => {
     {
       firstName: first_name || email,
       otpCode,
+      supportUrl: process.env.FRONTEND_URL + '/contact?topic=support',
       year: new Date().getFullYear(),
     },
     null
@@ -141,7 +142,7 @@ export const verifyOtp = asyncHandler(async (req, res, next) => {
       name: user.first_name || user.email,
       email: user.email,
       loginUrl: process.env.FRONTEND_URL + '/login',
-      supportUrl: process.env.FRONTEND_URL + '/support',
+      supportUrl: process.env.FRONTEND_URL + '/contact?topic=support',
       year: new Date().getFullYear(),
     },
     null

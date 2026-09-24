@@ -9,6 +9,7 @@ import ticketRouter from './ticket.js'
 import authRouter from './auth.js'
 import adminRouter from './admin.js'
 import aiRouter from './ai.js'
+import contactRouter from './contact.js'
 
 const router = express.Router()
 
@@ -91,5 +92,11 @@ router.use('/admin', adminRouter)
  *   description: AI-powered grant assistance endpoints
  */
 router.use('/ai', aiRouter)
+
+/**
+ * Public website contact form. The route deliberately exposes only the
+ * Turnstile site key; recipient and verification secret remain server-only.
+ */
+router.use('/public/contact', contactRouter)
 
 export default router

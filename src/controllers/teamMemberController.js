@@ -113,8 +113,7 @@ export const addTeamMember = asyncHandler(async (req, res, next) => {
       invitedBy,
       orgName,
       loginUrl: process.env.FRONTEND_URL + '/login',
-      supportEmail: process.env.FROM_EMAIL || 'support@grantmaestro.com',
-      supportUrl: process.env.FRONTEND_URL + '/support',
+      supportUrl: process.env.FRONTEND_URL + '/contact?topic=support',
       year: new Date().getFullYear(),
     },
     null

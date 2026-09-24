@@ -2,6 +2,9 @@ import asyncHandler from '../middlewares/async.js'
 import base from '../models/base.js'
 const { Organization, SupportTickets } = base
 import { supportTicketFileUrl } from '../utils/s3UrlHelper.js'
+import sendEmail from '../utils/mailHelper.js'
+import { getContactRecipient } from '../utils/contactRecipient.js'
+import { verifyTurnstile } from '../utils/turnstile.js'
 
 /**
  * @description Fetch the list of support tickets
@@ -112,7 +115,19 @@ export const getTicketDetail = asyncHandler(async (req, res, next) => {
  */
 export const manageTicket = asyncHandler(async (req, res, next) => {
   const organizationId = req.user.organization_id
-  const { ticket_id, ticket_title, ticket_description } = req.body
+  const { ticket_id, ticket_title, ticket_description, captchaToken } = req.body
+
+  const captcha = await verifyTurnstile(captchaToken, req.ip)
+  if (captcha.configurationError) {
+    return res.status(503).json({
+      status: false,
+      message: 'The security check is temporarily unavailable. Please try again later.',
+    })
+  }
+  if (!captcha.success) {
+    return res.status(422).json({ status: false, message: captcha.error })
+  }
+
   let ticketObj = {
     ticket_title,
     ticket_description,
@@ -166,6 +181,38 @@ export const manageTicket = asyncHandler(async (req, res, next) => {
   ticketDetail.organization_id = ticketInfo.organization_id
   ticketDetail.organization_name =
     ticketInfo?.ticked_raised_by_organization?.organization_name
+
+  const recipient = getContactRecipient()
+  if (recipient) {
+    const submittedByName = [req.user.first_name, req.user.last_name]
+      .filter(Boolean)
+      .join(' ') || 'GrantMaestro user'
+    const ticketFileUrl = supportTicketFileUrl(ticketInfo.ticket_file_path)
+
+    // An in-app ticket is already authenticated. The contact recipient stays
+    // environment-only, and the user's address is supplied as Reply-To.
+    const notification = await sendEmail(
+      recipient,
+      `GrantMaestro - Support enquiry (Ticket #${ticketId})`,
+      'supportTicketAlert',
+      {
+        ticketId,
+        ticketTitle: ticketInfo.ticket_title,
+        ticketDescription: ticketInfo.ticket_description,
+        organisationName: ticketDetail.organization_name || 'Not supplied',
+        submittedByName,
+        submittedByEmail: req.user.email,
+        ticketFileUrl,
+      },
+      null,
+      { replyTo: req.user.email }
+    )
+    if (!notification.delivered) {
+      console.warn(`[ticket] Support notification was not delivered: ${notification.reason}`)
+    }
+  } else {
+    console.warn('[ticket] Support notification skipped: contact recipient is not configured.')
+  }
 
   res.send({
     status: true,

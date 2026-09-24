@@ -44,6 +44,17 @@ app.use('/v1/auth/login', authLimiter)
 app.use('/v1/auth/signup', authLimiter)
 app.use('/v1/auth/forgot-password', authLimiter)
 app.use('/v1/auth/reset-password', authLimiter)
+
+// Public contact is protected by both IP throttling and server-side Turnstile
+// verification. Keep this lower than the general API limit to curb abuse.
+const contactLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: false, message: 'Too many enquiries have been submitted. Please try again later.' },
+})
+app.use('/v1/public/contact', contactLimiter)
 app.use('/v1', apiLimiter)
 
 // Stripe signs the exact raw request payload, so this route must be registered

@@ -1,0 +1,47 @@
+doctype html
+html
+  head
+    meta(charset="UTF-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1.0")
+    title GrantMaestro contact enquiry
+    style.
+      body{margin:0;padding:0;background:#f0f4f8;font-family:Arial,sans-serif;color:#243447}
+      .wrapper{max-width:680px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+      .hdr{background:#1a3c5e;padding:28px 36px;color:#fff}
+      .hdr h1{margin:0;font-size:23px}.hdr p{margin:6px 0 0;color:#c8e2f4;font-size:13px}
+      .bdy{padding:32px 36px}.bdy h2{color:#1a3c5e;font-size:20px;margin:0 0 18px}
+      .details{background:#f7fafc;border:1px solid #d9e4ec;border-radius:6px;padding:16px 18px;margin:0 0 20px}
+      .details p{margin:0 0 8px;line-height:1.5}.details p:last-child{margin:0}
+      .message{white-space:pre-wrap;background:#fff;border-left:4px solid #2563eb;padding:14px 16px;line-height:1.65}
+      .ftr{background:#f7fafc;padding:18px 36px;border-top:1px solid #e2e8f0;color:#718096;font-size:12px}
+  body
+    .wrapper
+      .hdr
+        h1 GrantMaestro
+        p Website contact enquiry
+      .bdy
+        h2 #{enquiryType}
+        .details
+          p
+            strong Name:
+            |  #{name}
+          p
+            strong Organisation:
+            |  #{organisation}
+          p
+            strong Email:
+            |  #{email}
+          p
+            strong Phone:
+            |  #{phone}
+          p
+            strong Received:
+            |  #{receivedAt}
+          p
+            strong Source:
+            |  #{sourceUrl}
+        p
+          strong Message
+        .message #{message}
+      .ftr
+        | This message was submitted through the GrantMaestro contact form.
