@@ -7,6 +7,7 @@ export default (sequelize, Sequelize) => {
             plan_description: { type: Sequelize.TEXT, allowNull: false },
             plan_duration: { type: Sequelize.ENUM('day', 'week', 'month', 'year'), allowNull: false },
             plan_price: { type: Sequelize.FLOAT(6, 2), allowNull: false },
+            // A full annual charge: always ten times the monthly plan_price.
             annual_price: { type: Sequelize.FLOAT(6, 2), allowNull: false, defaultValue: 0 },
             overage_rate: { type: Sequelize.FLOAT(6, 2), allowNull: false, defaultValue: 0 },
             seat_allowance: { type: Sequelize.STRING, allowNull: false, defaultValue: '' },

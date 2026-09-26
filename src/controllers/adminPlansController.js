@@ -8,6 +8,7 @@
 import asyncHandler from '../middlewares/async.js'
 import base from '../models/base.js'
 import { Op } from 'sequelize'
+import { calculateAnnualPrice } from '../utils/subscriptionBilling.js'
 const { SubscriptionPlans, PromoCode } = base
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -36,7 +37,6 @@ export const updatePlan = asyncHandler(async (req, res) => {
     plan_name,
     plan_description,
     plan_price,
-    annual_price,
     overage_rate,
     seat_allowance,
     admin_seats,
@@ -51,11 +51,14 @@ export const updatePlan = asyncHandler(async (req, res) => {
     return res.status(404).json({ status: false, message: 'Plan not found.' })
   }
 
+  const monthlyPrice = plan_price ?? plan.plan_price
+
   await plan.update({
     plan_name:        plan_name        ?? plan.plan_name,
     plan_description: plan_description ?? plan.plan_description,
-    plan_price:       plan_price       ?? plan.plan_price,
-    annual_price:     annual_price     ?? plan.annual_price,
+    plan_price:       monthlyPrice,
+    // Annual is always ten monthly payments: two months free.
+    annual_price:     calculateAnnualPrice(monthlyPrice),
     overage_rate:     overage_rate     ?? plan.overage_rate,
     seat_allowance:   seat_allowance   ?? plan.seat_allowance,
     admin_seats:      admin_seats      ?? plan.admin_seats,

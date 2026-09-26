@@ -86,10 +86,18 @@ export default (sequelize, Sequelize) => {
         allowNull: true,
         references: { model: 'grant_subscription_plans', key: 'plan_id' },
       },
+      preferred_subscription_billing_interval: {
+        type: Sequelize.ENUM('month', 'year'),
+        allowNull: true,
+      },
       subscription_plan_id: {
         type: Sequelize.INTEGER(10).UNSIGNED,
         allowNull: true,
         references: { model: 'grant_subscription_plans', key: 'plan_id' },
+      },
+      subscription_billing_interval: {
+        type: Sequelize.ENUM('month', 'year'),
+        allowNull: true,
       },
       subscription_renewal_date: { type: Sequelize.DATEONLY, allowNull: true },
       subscription_expiry_date: { type: Sequelize.DATEONLY, allowNull: true },

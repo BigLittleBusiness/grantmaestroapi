@@ -78,6 +78,7 @@ export const fetchSubscriptionPlans = asyncHandler(async (req, res, next) => {
       'plan_description',
       'plan_duration',
       'plan_price',
+      'annual_price',
       'stripe_plan_id',
     ],
     where: { is_blocked: 0, is_deleted: 0 },

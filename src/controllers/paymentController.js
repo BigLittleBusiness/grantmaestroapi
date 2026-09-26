@@ -3,17 +3,15 @@ import base from '../models/base.js'
 import Stripe from 'stripe'
 import sendEmail from '../utils/mailHelper.js'
 import { getStripeConfiguration } from '../utils/systemSettings.js'
+import {
+  BILLING_INTERVAL,
+  calculateSubscriptionExpiry,
+  getSubscriptionPrice,
+  isBillingInterval,
+  normaliseBillingInterval,
+} from '../utils/subscriptionBilling.js'
 
 const { User, SubscriptionPlans, PromoCode } = base
-
-const calculateExpiryDate = (plan) => {
-  const expiryDate = new Date()
-  if (plan.plan_duration === 'year') expiryDate.setFullYear(expiryDate.getFullYear() + 1)
-  else if (plan.plan_duration === 'week') expiryDate.setDate(expiryDate.getDate() + 7)
-  else if (plan.plan_duration === 'day') expiryDate.setDate(expiryDate.getDate() + 1)
-  else expiryDate.setMonth(expiryDate.getMonth() + 1)
-  return expiryDate
-}
 
 const validatePromo = async (code) => {
   if (!code) return null
@@ -27,15 +25,25 @@ const validatePromo = async (code) => {
   return promo
 }
 
-const activateSubscription = async ({ userId, planId, stripeSubscriptionId = null }) => {
+const activateSubscription = async ({
+  userId,
+  planId,
+  billingInterval = BILLING_INTERVAL.MONTH,
+  stripeSubscriptionId = null,
+  transactionRef = '',
+}) => {
   const plan = await SubscriptionPlans.findOne({ where: { plan_id: planId, is_deleted: 0 } })
   if (!plan) throw new Error('Subscription plan not found.')
 
-  const expiryDate = calculateExpiryDate(plan)
+  const interval = normaliseBillingInterval(billingInterval)
+  const amount = getSubscriptionPrice(plan, interval)
+  const expiryDate = calculateSubscriptionExpiry(interval)
   await User.update(
     {
       preferred_subscription_plan_id: planId,
+      preferred_subscription_billing_interval: interval,
       subscription_plan_id: planId,
+      subscription_billing_interval: interval,
       subscription_status: true,
       subscription_is_in_trial: false,
       subscription_renewal_date: new Date(),
@@ -50,12 +58,17 @@ const activateSubscription = async ({ userId, planId, stripeSubscriptionId = nul
   if (user?.email) {
     await sendEmail(user.email, 'Payment Successful — GrantMaestro', 'paymentSuccess', {
       name: user.first_name || 'there',
+      orgName: user.organization_name || 'your organisation',
       planName: plan.plan_name,
-      amount: `$${Number(plan.plan_price).toFixed(2)}`,
-      currency: 'AUD',
+      amount: Number(amount).toFixed(2),
+      billingInterval: interval === BILLING_INTERVAL.YEAR ? 'Annual — two months free' : 'Monthly',
+      renewalDate: expiryDate.toLocaleDateString('en-AU'),
+      transactionRef: transactionRef || 'Available in your payment provider',
       dashboardUrl: `${process.env.FRONTEND_URL}/dashboard`,
       loginUrl: `${process.env.FRONTEND_URL}/login`,
+      supportUrl: `${process.env.FRONTEND_URL}/contact?topic=support`,
       recipientEmail: user.email,
+      email: user.email,
       year: new Date().getFullYear(),
     })
   }
@@ -74,9 +87,12 @@ export const getPaymentProvider = asyncHandler(async (_req, res) => {
 })
 
 export const createCheckoutSession = asyncHandler(async (req, res) => {
-  const { preferred_plan_id, promo_code } = req.body
+  const { preferred_plan_id, promo_code, billing_interval } = req.body
   if (!preferred_plan_id) {
     return res.status(400).json({ status: false, message: 'Please select a subscription plan.' })
+  }
+  if (!isBillingInterval(billing_interval)) {
+    return res.status(422).json({ status: false, message: 'Please select monthly or annual billing.' })
   }
 
   const stripeConfig = await getStripeConfiguration()
@@ -93,6 +109,9 @@ export const createCheckoutSession = asyncHandler(async (req, res) => {
   if (!plan) {
     return res.status(404).json({ status: false, message: 'Subscription plan not found.' })
   }
+
+  const interval = normaliseBillingInterval(billing_interval)
+  const subscriptionAmount = getSubscriptionPrice(plan, interval)
 
   let promo = null
   try {
@@ -111,20 +130,22 @@ export const createCheckoutSession = asyncHandler(async (req, res) => {
       price_data: {
         currency,
         product_data: { name: `GrantMaestro ${plan.plan_name}` },
-        unit_amount: Math.round(Number(plan.plan_price) * 100),
-        recurring: { interval: plan.plan_duration === 'year' ? 'year' : 'month' },
+        unit_amount: Math.round(subscriptionAmount * 100),
+        recurring: { interval },
       },
       quantity: 1,
     }],
     metadata: {
       user_id: String(req.user.user_id),
       plan_id: String(plan.plan_id),
+      billing_interval: interval,
       platform: 'grantmaestro',
     },
     subscription_data: {
       metadata: {
         user_id: String(req.user.user_id),
         plan_id: String(plan.plan_id),
+        billing_interval: interval,
         platform: 'grantmaestro',
       },
     },
@@ -183,7 +204,9 @@ export const paymentWebhook = asyncHandler(async (req, res) => {
         await activateSubscription({
           userId,
           planId,
+          billingInterval: session.metadata?.billing_interval,
           stripeSubscriptionId: typeof session.subscription === 'string' ? session.subscription : null,
+          transactionRef: session.payment_intent || session.id,
         })
       }
     }

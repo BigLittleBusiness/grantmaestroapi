@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "migrate:annual-billing": "node scripts/annualBillingMigration.js",
+    "test:annual-billing": "node scripts/annualBillingSmokeTest.js"
   },
   "keywords": [],
   "author": "",

@@ -19,6 +19,12 @@ import asyncHandler from '../middlewares/async.js'
 import axios from 'axios'
 import base from '../models/base.js'
 import { encryptSetting, decryptSetting } from '../utils/settingsCrypto.js'
+import {
+  calculateSubscriptionExpiry,
+  getSubscriptionPrice,
+  isBillingInterval,
+  normaliseBillingInterval,
+} from '../utils/subscriptionBilling.js'
 
 const { SystemSettings, User, SubscriptionPlans } = base
 
@@ -183,13 +189,19 @@ export const testPinConnection = asyncHandler(async (req, res) => {
  * @body {number} payment_made_for  – User.user_id                (required)
  */
 export const createPinCharge = asyncHandler(async (req, res) => {
-  const { card_token, preferred_plan_id } = req.body
+  const { card_token, preferred_plan_id, billing_interval } = req.body
   const payment_made_for = req.user.user_id
 
   if (!card_token || !preferred_plan_id) {
     return res.status(400).json({
       status: false,
       message: 'card_token and preferred_plan_id are required.',
+    })
+  }
+  if (!isBillingInterval(billing_interval)) {
+    return res.status(422).json({
+      status: false,
+      message: 'Please select monthly or annual billing.',
     })
   }
 
@@ -200,6 +212,7 @@ export const createPinCharge = asyncHandler(async (req, res) => {
   if (!plan) {
     return res.status(404).json({ status: false, message: 'Subscription plan not found.' })
   }
+  const billingInterval = normaliseBillingInterval(billing_interval)
 
   // Load user
   const user = await User.findOne({ where: { user_id: payment_made_for, is_deleted: 0 } })
@@ -220,14 +233,15 @@ export const createPinCharge = asyncHandler(async (req, res) => {
   }
 
   // Amount in cents
-  const amountCents = Math.round(plan.plan_price * 100)
+  const subscriptionAmount = getSubscriptionPrice(plan, billingInterval)
+  const amountCents = Math.round(subscriptionAmount * 100)
 
   try {
     const chargeResponse = await axios.post(
       `${baseUrl}/charges`,
       {
         email:       user.email,
-        description: `Grant Maestro – ${plan.plan_name} (${plan.plan_duration}ly)`,
+        description: `Grant Maestro – ${plan.plan_name} (${billingInterval === 'year' ? 'annual, two months free' : 'monthly'})`,
         amount:      amountCents,
         currency:    currency,
         ip_address:  req.ip || '0.0.0.0',
@@ -235,6 +249,7 @@ export const createPinCharge = asyncHandler(async (req, res) => {
         metadata: {
           user_id:  payment_made_for,
           plan_id:  preferred_plan_id,
+          billing_interval: billingInterval,
           platform: 'grant_maestro',
         },
       },
@@ -247,15 +262,13 @@ export const createPinCharge = asyncHandler(async (req, res) => {
 
     if (charge.success) {
       // Activate the subscription immediately on successful charge
-      const expiryDate = new Date()
-      if (plan.plan_duration === 'month') expiryDate.setMonth(expiryDate.getMonth() + 1)
-      else if (plan.plan_duration === 'year') expiryDate.setFullYear(expiryDate.getFullYear() + 1)
-      else if (plan.plan_duration === 'week') expiryDate.setDate(expiryDate.getDate() + 7)
-      else expiryDate.setDate(expiryDate.getDate() + 1)
+      const expiryDate = calculateSubscriptionExpiry(billingInterval)
 
       await User.update(
         {
           subscription_plan_id:       preferred_plan_id,
+          preferred_subscription_billing_interval: billingInterval,
+          subscription_billing_interval: billingInterval,
           subscription_status:        true,
           subscription_is_in_trial:   false,
           subscription_renewal_date:  new Date(),
@@ -329,19 +342,18 @@ export const pinWebhook = asyncHandler(async (req, res) => {
     const charge  = event.data
     const userId  = charge?.metadata?.user_id
     const planId  = charge?.metadata?.plan_id
+    const billingInterval = normaliseBillingInterval(charge?.metadata?.billing_interval)
 
     if (userId && planId) {
       const plan = await SubscriptionPlans.findOne({ where: { plan_id: planId, is_deleted: 0 } })
       if (plan) {
-        const expiryDate = new Date()
-        if (plan.plan_duration === 'month') expiryDate.setMonth(expiryDate.getMonth() + 1)
-        else if (plan.plan_duration === 'year') expiryDate.setFullYear(expiryDate.getFullYear() + 1)
-        else if (plan.plan_duration === 'week') expiryDate.setDate(expiryDate.getDate() + 7)
-        else expiryDate.setDate(expiryDate.getDate() + 1)
+        const expiryDate = calculateSubscriptionExpiry(billingInterval)
 
         await User.update(
           {
             subscription_plan_id:       planId,
+            preferred_subscription_billing_interval: billingInterval,
+            subscription_billing_interval: billingInterval,
             subscription_status:        true,
             subscription_is_in_trial:   false,
             subscription_renewal_date:  new Date(),

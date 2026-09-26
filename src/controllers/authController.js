@@ -22,7 +22,21 @@ const { User, UserRole, Organization, MasterData, Country, SubscriptionPlans } =
  * @returns {Object} Response with status and success message
  */
 export const signup = asyncHandler(async (req, res, next) => {
-  const { email, password, preferred_subscription_plan_id, first_name, last_name, organization_name } = req.body
+  const {
+    email,
+    password,
+    preferred_subscription_plan_id,
+    preferred_subscription_billing_interval = 'year',
+    first_name,
+    last_name,
+    organization_name,
+  } = req.body
+  if (!['month', 'year'].includes(preferred_subscription_billing_interval)) {
+    return res.status(422).json({
+      status: false,
+      message: 'Please select monthly or annual billing.',
+    })
+  }
   const usr = await User.findOne({ where: { email: email } })
   if (usr) {
     return res.send({
@@ -74,6 +88,7 @@ export const signup = asyncHandler(async (req, res, next) => {
     created_at: new Date(),
     modified_at: new Date(),
     preferred_subscription_plan_id,
+    preferred_subscription_billing_interval,
     subscription_expiry_date: subscriptionExpiryDate,
     account_verification_otp: otpCode,
     is_otp_verified: 0,
@@ -156,6 +171,7 @@ export const verifyOtp = asyncHandler(async (req, res, next) => {
     user_type: user.user_type,
     organization_id: user.organization_id,
     preferred_subscription_plan_id: user.preferred_subscription_plan_id,
+    preferred_subscription_billing_interval: user.preferred_subscription_billing_interval,
   }
 
   res.json({
@@ -276,6 +292,8 @@ export const login = asyncHandler(async (req, res, next) => {
     user.preferred_subscription_plan_id
       ? user.preferred_subscription_plan_id
       : ''
+  userDetails.preferred_subscription_billing_interval =
+    user.preferred_subscription_billing_interval || 'year'
   userDetails.subscription_status = subscriptionStatus
   userDetails.requires_password_reset = user.requires_password_reset || 0
   const accessToken = jwt.sign({ id: user.user_id }, process.env.JWT_SECRET, {
