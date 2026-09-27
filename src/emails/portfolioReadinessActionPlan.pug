@@ -1,0 +1,29 @@
+doctype html
+html
+  head
+    meta(charset="UTF-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1.0")
+    title GrantMaestro Portfolio Readiness Action Plan
+    style.
+      body{margin:0;padding:0;background:#f4f8fd;font-family:Arial,sans-serif;color:#0d0d0d}.wrapper{max-width:680px;margin:32px auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(0,26,139,.12)}.hdr{padding:32px 38px;background:linear-gradient(125deg,#00115d,#001a8b);color:#fff}.hdr h1{margin:0;font-size:25px}.hdr p{margin:8px 0 0;color:#8fdafa;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}.bdy{padding:34px 38px}.bdy h2{margin:0 0 16px;color:#001a8b;font-size:22px}.bdy p{color:#404040;font-size:15px;line-height:1.65;margin:0 0 16px}.score{display:inline-block;margin:0 0 22px;padding:12px 15px;border:1px solid #bfdafa;border-radius:8px;background:#f4f8fd;color:#001a8b;font-size:15px;font-weight:700}.priority{margin:14px 0;padding:17px 18px;border:1px solid #d7e2f4;border-radius:8px;background:#fbfdff}.priority .number{color:#2488ff;font-size:11px;font-weight:800;letter-spacing:.1em}.priority h3{margin:5px 0 6px;color:#001a8b;font-size:16px}.priority p{margin:0;font-size:14px}.btn{display:inline-block;margin:10px 0 22px;padding:13px 20px;border-radius:7px;background:#2488ff;color:#fff!important;font-weight:700;text-decoration:none}.note{padding:15px 17px;border-left:4px solid #8fdafa;background:#f4f8fd;font-size:13px!important}.ftr{padding:20px 38px;border-top:1px solid #d7e2f4;background:#f8fbff;color:#56657a;font-size:12px;line-height:1.6}.ftr a{color:#001a8b;text-decoration:none}
+  body
+    .wrapper
+      .hdr
+        h1 GrantMaestro
+        p Portfolio readiness action plan
+      .bdy
+        h2 Hi #{firstName},
+        p Thank you for completing the Grant Portfolio Risk & Readiness Snapshot for #{organisation}.
+        .score Your snapshot result: #{score}/100 — #{readinessLabel}
+        p Start with the practical priorities below. They are designed to help make grant actions, ownership and supporting evidence easier to see and coordinate.
+        each priority, index in priorities
+          .priority
+            .number 0#{index + 1} · PRIORITY
+            h3 #{priority.title}
+            p #{priority.detail}
+        p Use this plan as a prompt for your next grants, finance or leadership discussion.
+        a.btn(href=walkthroughUrl) View a council-focused walkthrough
+        p.note This action plan is a practical working aid. It is not a compliance assessment, certification or formal audit.
+      .ftr
+        p &copy; #{year} GrantMaestro · <a href=privacyUrl>Privacy</a>
+        p You received this email after requesting your action plan through the GrantMaestro website.

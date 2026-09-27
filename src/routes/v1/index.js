@@ -10,6 +10,7 @@ import authRouter from './auth.js'
 import adminRouter from './admin.js'
 import aiRouter from './ai.js'
 import contactRouter from './contact.js'
+import portfolioReadinessRouter from './portfolioReadiness.js'
 
 const router = express.Router()
 
@@ -98,5 +99,9 @@ router.use('/ai', aiRouter)
  * Turnstile site key; recipient and verification secret remain server-only.
  */
 router.use('/public/contact', contactRouter)
+
+// Public lead magnet: the action-plan request is protected by Turnstile and
+// available only when protected delivery settings are present.
+router.use('/public/portfolio-readiness', portfolioReadinessRouter)
 
 export default router
