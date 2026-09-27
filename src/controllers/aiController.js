@@ -1,19 +1,5 @@
 import asyncHandler from '../middlewares/async.js'
-import OpenAI from 'openai'
-
-/**
- * Lazily initialise the OpenAI client so the server still starts even if
- * OPENAI_API_KEY is not yet configured in the deployment environment.
- */
-const getOpenAI = () => {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is not configured on this server.')
-  }
-  return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    baseURL: process.env.OPENAI_API_BASE || 'https://api.openai.com/v1',
-  })
-}
+import { callClaudeText } from '../utils/anthropicClient.js'
 
 /**
  * Helper — call the chat completions endpoint and return the trimmed text.
@@ -22,17 +8,13 @@ const getOpenAI = () => {
  * @returns {Promise<string>}
  */
 const chat = async (systemPrompt, userPrompt) => {
-  const openai = getOpenAI()
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
+  return callClaudeText({
+    systemPrompt,
+    userPrompt,
+    model: process.env.CLAUDE_DRAFTING_MODEL || 'claude-haiku-4-5',
     temperature: 0.4,
-    max_tokens: 512,
+    maxTokens: 512,
   })
-  return completion.choices[0].message.content.trim()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

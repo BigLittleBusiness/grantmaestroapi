@@ -32,6 +32,9 @@ READINESS_INSIGHT_AI_ENABLED=false
 # ANTHROPIC_API_BASE=https://api.anthropic.com
 # ANTHROPIC_API_KEY=REPLACE_WITH_APPROVED_ANTHROPIC_KEY
 
+# Internal task and note drafting uses the same server-side Claude account.
+# CLAUDE_DRAFTING_MODEL=claude-haiku-4-5
+
 # Claude Haiku is selected for concise, bounded public interpretation. Change
 # this only after the provider and quality/cost review approves a replacement.
 READINESS_INSIGHT_AI_MODEL=claude-haiku-4-5

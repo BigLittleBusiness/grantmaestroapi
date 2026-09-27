@@ -1,3 +1,5 @@
+import { callClaudeText, isClaudeConfigured } from './anthropicClient.js'
+
 const questionDefinitions = [
   { id: 'deadline_visibility', category: 'visibility', label: 'shared deadline visibility', options: ['not reliably', 'partly visible', 'mostly visible', 'consistently visible'] },
   { id: 'forward_planning', category: 'visibility', label: 'forward planning horizon', options: ['less than 30 days', 'about 30 days', '60–90 days', 'more than 90 days'] },
@@ -122,11 +124,9 @@ export const buildGuidedReadinessInsight = (answers) => {
 
 const readAiConfiguration = () => {
   const enabled = String(process.env.READINESS_INSIGHT_AI_ENABLED || '').toLowerCase() === 'true'
-  const apiKey = String(process.env.ANTHROPIC_API_KEY || '').trim()
-  const baseURL = String(process.env.ANTHROPIC_API_BASE || 'https://api.anthropic.com').replace(/\/$/, '').trim()
   const model = String(process.env.READINESS_INSIGHT_AI_MODEL || 'claude-haiku-4-5').trim()
   const timeout = clampInteger(process.env.READINESS_INSIGHT_AI_TIMEOUT_MS, 1000, 15000, 8000)
-  return { enabled: enabled && Boolean(apiKey), apiKey, baseURL, model, timeout }
+  return { enabled: enabled && isClaudeConfigured(), model, timeout }
 }
 
 const cache = new Map()
@@ -216,28 +216,14 @@ export const createReadinessInsight = async (answers) => {
   }
 
   try {
-    const abortController = new AbortController()
-    const timeoutId = setTimeout(() => abortController.abort(), configuration.timeout)
-    const response = await fetch(`${configuration.baseURL}/v1/messages`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': configuration.apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      signal: abortController.signal,
-      body: JSON.stringify({
+    const content = await callClaudeText({
       model: configuration.model,
-        max_tokens: 800,
-        temperature: 0.2,
-        system: 'You are a careful public-sector grants operations adviser. Treat supplied scores as limited self-reported signals, not verified facts. Output only valid JSON.',
-        messages: [{ role: 'user', content: createModelPrompt(answers, guided) }],
-      }),
+      maxTokens: 800,
+      temperature: 0.2,
+      timeout: configuration.timeout,
+      systemPrompt: 'You are a careful public-sector grants operations adviser. Treat supplied scores as limited self-reported signals, not verified facts. Output only valid JSON.',
+      userPrompt: createModelPrompt(answers, guided),
     })
-    clearTimeout(timeoutId)
-    if (!response.ok) throw new Error(`Claude interpretation request failed with ${response.status}`)
-    const body = await response.json()
-    const content = body?.content?.find((block) => block?.type === 'text')?.text
     const insight = validateModelInsight(parseModelJson(content), guided) || guided
     putCached(key, insight)
     return insight

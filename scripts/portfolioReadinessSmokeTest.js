@@ -10,6 +10,7 @@ const route = await read('src/routes/v1/portfolioReadiness.js')
 const routeRegistry = await read('src/routes/v1/index.js')
 const server = await read('src/index.js')
 const insightUtility = await read('src/utils/portfolioReadinessInsights.js')
+const claudeClient = await read('src/utils/anthropicClient.js')
 
 assert.match(controller, /verifyTurnstile\(req\.body\.captchaToken, req\.ip\)/)
 assert.match(controller, /marketingConsent === true/)
@@ -25,9 +26,10 @@ assert.match(server, /app\.use\('\/v1\/public\/portfolio-readiness', publicFormL
 assert.match(server, /app\.use\('\/v1\/public\/portfolio-readiness\/interpretation', readinessInsightLimiter\)/)
 assert.match(insightUtility, /READINESS_INSIGHT_AI_ENABLED/)
 assert.match(insightUtility, /normaliseReadinessAnswers/)
-assert.match(insightUtility, /ANTHROPIC_API_KEY/)
-assert.match(insightUtility, /anthropic-version/)
-assert.match(insightUtility, /\/v1\/messages/)
+assert.match(insightUtility, /callClaudeText/)
+assert.match(claudeClient, /ANTHROPIC_API_KEY/)
+assert.match(claudeClient, /anthropic-version/)
+assert.match(claudeClient, /\/v1\/messages/)
 
 for (const template of ['portfolioReadinessActionPlan', 'portfolioReadinessLeadAlert']) {
   pug.compileFile(new URL(`src/emails/${template}.pug`, root).pathname)
