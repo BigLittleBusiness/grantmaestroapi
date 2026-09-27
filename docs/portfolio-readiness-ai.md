@@ -1,47 +1,54 @@
-# Portfolio Readiness Insight — BinaryLane AI Configuration
+# Portfolio Readiness Insight — Manus Structured Analysis
 
 ## Purpose
 
-The public `/grant-portfolio-readiness` page gives each visitor an expanded outcome-focused interpretation immediately after their nine answers and before the optional action-plan email form.
+The public `/grant-portfolio-readiness` page gives each visitor an expanded, outcome-focused reflection after nine readiness answers and before the optional action-plan email form.
 
-It always has a **guided interpretation** derived from the answer pattern. This requires no third-party service, does not need a secret and is the safe default if the AI provider is unavailable, capped or disabled.
+The page always shows an immediate **guided interpretation** calculated from the answer pattern. That does not require a credential or third-party call. When Manus structured analysis is approved and enabled, the API starts a private Manus task using only the anonymous fixed-answer pattern. The page keeps showing the useful guided reflection while it checks for the structured result, then swaps in the returned reflection when available.
 
-An optional server-side model can refine that interpretation. It must run from the **GrantMaestro API on the BinaryLane VPS**. The React browser bundle never receives an AI credential and does not call the provider directly.
+> The reflection is a practical discussion aid. It is not an audit, compliance assessment, certification, legal opinion or verified portfolio diagnosis.
 
-## Privacy and data boundary
+## Data boundary
 
-Only this anonymous information is sent to the configured provider when AI refinement is enabled:
+Only the following anonymous information reaches the Manus API:
 
-- nine fixed question identifiers;
+- the nine fixed question identifiers;
 - one integer score from `0` to `3` for each; and
-- the derived category pattern.
+- the derived category pattern and corresponding answer labels.
 
-The provider does **not** receive a visitor’s name, email, organisation, role, grant data, funder data, financial data, documents, IP address, cookies or free-text input. The API does not persist the anonymous result. A short-lived in-memory response cache avoids repeat calls for the same answer pattern.
+The Manus task does **not** receive a visitor’s name, email, organisation, role, grant data, funder data, financial data, documents, IP address, cookies or free-text input. The API does not persist the answer pattern or contact data for this workflow. It holds an opaque mapping from the browser to the Manus task ID in memory only for up to ten minutes; the browser never sees the Manus task ID.
 
-> The feature is a practical reflection aid, not a compliance assessment, audit, certification, legal opinion or verified portfolio diagnosis.
+## Manus task design
+
+Each enabled analysis uses `POST https://api.manus.ai/v2/task.create` with:
+
+- `interactive_mode: false`, so the task proceeds without asking the visitor questions;
+- `hide_in_task_list: true` and `share_visibility: private`;
+- the `manus-1.6-lite` profile by default, configurable through the protected environment;
+- a strict structured-output schema containing only `headline`, three `paragraphs`, and `discussionPrompt`; and
+- an instruction not to browse, use external tools, ask questions or take external action.
+
+The API retrieves only the `structured_output_result` from `task.listMessages`. A task error, waiting state, invalid structured output, timeout or unavailable credential results in the guided reflection remaining in place.
 
 ## BinaryLane environment configuration
 
-Store the following values only in `/etc/grantmaestro/api.env` (or the protected production secret manager that writes it). Do not put them in GitHub, a React `REACT_APP_*` variable, browser source, a PM2 command line or the UI `.env.production` file.
+Store these values only in `/etc/grantmaestro/api.env` (or the approved protected secret manager that writes it). Do not put them in GitHub, the React bundle, a `REACT_APP_*` variable, browser source, PM2 command line or UI `.env.production` file.
 
 ```dotenv
-# Keep false until provider, privacy review and budget owner are approved.
-READINESS_INSIGHT_AI_ENABLED=false
+# Keep false until the Manus API credential, privacy review and operational cap
+# are approved. Guided output remains live while this is false.
+MANUS_READINESS_ANALYSIS_ENABLED=false
 
-# Claude provider configuration is read only by the Node API.
-# ANTHROPIC_API_BASE=https://api.anthropic.com
-# ANTHROPIC_API_KEY=REPLACE_WITH_APPROVED_ANTHROPIC_KEY
+# Server-only Manus API authentication.
+# MANUS_API_KEY=REPLACE_WITH_APPROVED_MANUS_API_KEY
+# MANUS_API_BASE=https://api.manus.ai
 
-# Internal task and note drafting uses the same server-side Claude account.
-# CLAUDE_DRAFTING_MODEL=claude-haiku-4-5
+# Use the lightweight profile for the short, bounded structured reflection.
+MANUS_READINESS_AGENT_PROFILE=manus-1.6-lite
 
-# Claude Haiku is selected for concise, bounded public interpretation. Change
-# this only after the provider and quality/cost review approves a replacement.
-READINESS_INSIGHT_AI_MODEL=claude-haiku-4-5
-
-# Public endpoint safeguards: cap model usage and avoid long browser waits.
-READINESS_INSIGHT_DAILY_LIMIT=100
-READINESS_INSIGHT_AI_TIMEOUT_MS=8000
+# Safety and responsiveness controls.
+MANUS_READINESS_DAILY_LIMIT=25
+MANUS_READINESS_REQUEST_TIMEOUT_MS=12000
 ```
 
 After a protected configuration change:
@@ -58,35 +65,38 @@ sudo -iu grantmaestro bash -lc '
 
 ## Enablement checklist
 
-1. Approve the provider, model, data-processing terms and credential owner.
-2. Set a conservative daily limit. The endpoint uses an in-process daily limit and a maximum 200-entry, 24-hour response cache; it is intentionally a secondary safeguard, not a replacement for the provider’s project-level usage cap.
-3. Set a provider-level spending alert and hard project cap. The application cap should be below that ceiling.
-4. Set `READINESS_INSIGHT_AI_ENABLED=true`, reload PM2, and test with a non-identifying sample answer pattern.
-5. Confirm results are concise, are framed as practical reflections and contain no unsupported claims.
-6. Test the disabled path (`READINESS_INSIGHT_AI_ENABLED=false`) and an invalid provider key. Both must return the guided interpretation without an error page.
-7. Monitor API logs for the generic fallback warning. Do not log answer patterns, prompts or provider credentials.
+1. Create or designate the dedicated Manus API credential owner and store the key in the protected BinaryLane environment.
+2. Approve the Manus data-handling terms and the limited anonymous-score data boundary above.
+3. Set a conservative `MANUS_READINESS_DAILY_LIMIT`; the application cap is a secondary safeguard and should remain below the account-level operational limit.
+4. Set `MANUS_READINESS_ANALYSIS_ENABLED=true`, reload PM2 and test with a non-identifying answer pattern.
+5. Confirm the task is private, non-interactive, has no connector or external tool access, and returns only the expected structured fields.
+6. Review representative results for Australian English, practical tone, no unsupported claims and clear differentiation from an audit or formal assessment.
+7. Test the disabled state and invalid-key state. Both must keep the guided reflection visible without a visitor-facing provider error.
 
-## API behaviour and abuse controls
+## API behaviour and controls
 
 | Control | Behaviour |
 |---|---|
-| Route | `POST /v1/public/portfolio-readiness/interpretation` |
-| Inputs | Exactly nine pre-defined integer scores; any other shape is rejected with HTTP 422. |
-| Public throttle | Six interpretation requests per IP per hour. |
-| Provider enablement | Off unless `READINESS_INSIGHT_AI_ENABLED=true` and an API key is present. |
-| Daily budget | `READINESS_INSIGHT_DAILY_LIMIT`; after the cap, the server returns the guided interpretation. |
-| Timeout / provider failure | Returns the guided interpretation; no visitor-facing provider error. |
-| Prompt injection | The public request accepts fixed IDs and integers only; no visitor free-text is interpolated into the provider prompt. |
-| Caching | Up to 200 response patterns are held in process for 24 hours; no contact details are included. |
+| Start route | `POST /v1/public/portfolio-readiness/interpretation` |
+| Status route | `GET /v1/public/portfolio-readiness/interpretation/:analysisId` |
+| Inputs | Exactly nine pre-defined integer scores; any other shape receives HTTP 422. |
+| Start throttle | Six start requests per IP per hour. |
+| Status throttle | Twenty status checks per IP per ten minutes. |
+| Task privacy | Private, hidden from task list and non-interactive; no Manus task ID reaches the browser. |
+| Response format | A strict Manus structured-output schema: headline, exactly three paragraphs and one discussion prompt. |
+| In-memory mapping | At most 200 opaque analysis mappings, deleted after ten minutes or terminal result. |
+| Result cache | Up to 200 successful anonymous answer patterns retained in process for 24 hours; no contact data is cached. |
+| Daily cap | `MANUS_READINESS_DAILY_LIMIT`; after the cap, guided output remains in place. |
+| Provider failure | Guided output remains in place; no provider error is shown to a visitor. |
+| Prompt injection | The public request accepts fixed IDs and integers only; no visitor free text is included in the Manus prompt. |
 
 ## Acceptance checks
 
 ```bash
-# API regression check
 cd /srv/grantmaestro/api
 npm run test:portfolio-readiness
 
-# Guided path — expected status 200 and data.source = "guided" when AI is disabled
+# Guided path when Manus analysis is disabled: status 200, data.source = "guided"
 curl -fsS -X POST https://APP_HOST/v1/public/portfolio-readiness/interpretation \
   -H 'Content-Type: application/json' \
   --data '{"answers":[
@@ -102,4 +112,4 @@ curl -fsS -X POST https://APP_HOST/v1/public/portfolio-readiness/interpretation 
   ]}'
 ```
 
-The UI must show the interpretation above the action-plan form in both guided and AI-enabled modes. It must remain useful if an AI provider is never configured.
+When Manus analysis is enabled, the start response will have `analysisStatus: "pending"` and an opaque `analysisId`. Query the status route with that analysis ID until `analysisStatus` becomes `ready`; verify that `data.source` is `"manus"`, exactly three paragraphs are returned and the result contains no contact or organisation details.

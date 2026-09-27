@@ -1,5 +1,3 @@
-import { callClaudeText, isClaudeConfigured } from './anthropicClient.js'
-
 const questionDefinitions = [
   { id: 'deadline_visibility', category: 'visibility', label: 'shared deadline visibility', options: ['not reliably', 'partly visible', 'mostly visible', 'consistently visible'] },
   { id: 'forward_planning', category: 'visibility', label: 'forward planning horizon', options: ['less than 30 days', 'about 30 days', '60–90 days', 'more than 90 days'] },
@@ -34,6 +32,17 @@ const categoryDefinitions = {
     high: 'the team has a strong foundation for shared delivery. Maintaining clear ownership, next actions and accessible context will help the process remain resilient when responsibilities move between people.',
     action: 'For each active grant, record one accountable owner, the next action, contributors and the evidence that will show the action is complete.',
   },
+}
+
+const structuredInsightSchema = {
+  type: 'object',
+  properties: {
+    headline: { type: 'string', description: 'A concise, outcome-led interpretation headline.' },
+    paragraphs: { type: 'array', items: { type: 'string' }, description: 'Exactly three plain-English reflection paragraphs.' },
+    discussionPrompt: { type: 'string', description: 'One short question for the next portfolio review.' },
+  },
+  required: ['headline', 'paragraphs', 'discussionPrompt'],
+  additionalProperties: false,
 }
 
 const clampInteger = (value, minimum, maximum, fallback) => {
@@ -92,8 +101,9 @@ const insightHeadline = (overallScore) => {
 }
 
 /**
- * Produces a valuable, explainable interpretation without a model call. It is
- * the safe default on every environment and the fallback for a provider error.
+ * Produces a valuable, explainable interpretation without an external call.
+ * This is always returned immediately and is the safe fallback for a disabled,
+ * rate-limited or unavailable Manus workflow.
  */
 export const buildGuidedReadinessInsight = (answers) => {
   const categories = calculateCategoryScores(answers)
@@ -104,7 +114,7 @@ export const buildGuidedReadinessInsight = (answers) => {
   const secondarySignals = weakSignals(secondary)
   const primaryDetail = primarySignals.length
     ? `In particular, ${primarySignals.join(' and ')}.`
-    : `This is the area most worth protecting as the portfolio changes.`
+    : 'This is the area most worth protecting as the portfolio changes.'
   const connectedDetail = secondarySignals.length
     ? `The related signal is that ${secondarySignals.join(' and ')}.`
     : `The related operating area is ${secondary.title.toLowerCase()}.`
@@ -116,21 +126,26 @@ export const buildGuidedReadinessInsight = (answers) => {
       `${connectedDetail} When ${primary.title.toLowerCase()} and ${secondary.title.toLowerCase()} are not equally visible, teams can spend more time reconstructing the current position than discussing the decision or contribution that is needed next. This points to an operating-system opportunity, not a judgement about individual commitment.`,
       `A useful first move is deliberately small: ${primary.action} The outcome to aim for is a calmer, shared view of the work closest to due, so issues can be raised earlier and contributors can act with less follow-up.`,
     ],
-    discussionPrompt: `At the next portfolio review, ask: “For the next three material commitments, can we see the due date, accountable owner, next action and latest supporting evidence without a separate follow-up?”`,
+    discussionPrompt: 'At the next portfolio review, ask: “For the next three material commitments, can we see the due date, accountable owner, next action and latest supporting evidence without a separate follow-up?”',
     categoryScores: categories.map(({ key, score }) => ({ key, score })),
     source: 'guided',
   }
 }
 
-const readAiConfiguration = () => {
-  const enabled = String(process.env.READINESS_INSIGHT_AI_ENABLED || '').toLowerCase() === 'true'
-  const model = String(process.env.READINESS_INSIGHT_AI_MODEL || 'claude-haiku-4-5').trim()
-  const timeout = clampInteger(process.env.READINESS_INSIGHT_AI_TIMEOUT_MS, 1000, 15000, 8000)
-  return { enabled: enabled && isClaudeConfigured(), model, timeout }
+const readManusConfiguration = () => {
+  const enabled = String(process.env.MANUS_READINESS_ANALYSIS_ENABLED || '').toLowerCase() === 'true'
+  const apiKey = String(process.env.MANUS_API_KEY || '').trim()
+  const apiBase = String(process.env.MANUS_API_BASE || 'https://api.manus.ai').trim().replace(/\/$/, '')
+  const profile = String(process.env.MANUS_READINESS_AGENT_PROFILE || 'manus-1.6-lite').trim()
+  const requestTimeout = clampInteger(process.env.MANUS_READINESS_REQUEST_TIMEOUT_MS, 2000, 20000, 12000)
+  return { enabled: enabled && Boolean(apiKey), apiKey, apiBase, profile, requestTimeout }
 }
 
 const cache = new Map()
 const cacheLimit = 200
+const analysisStore = new Map()
+const analysisLimit = 200
+const analysisLifetimeMs = 10 * 60 * 1000
 let dailyUsage = { date: '', count: 0 }
 
 const cacheKeyFor = (answers) => answers.map((answer) => `${answer.id}:${answer.score}`).join('|')
@@ -148,16 +163,23 @@ const putCached = (key, insight) => {
   cache.set(key, { insight, expiresAt: Date.now() + 24 * 60 * 60 * 1000 })
   while (cache.size > cacheLimit) cache.delete(cache.keys().next().value)
 }
-const canUseModelToday = () => {
+const pruneAnalysisStore = () => {
+  const now = Date.now()
+  for (const [analysisId, record] of analysisStore) {
+    if (record.expiresAt < now) analysisStore.delete(analysisId)
+  }
+  while (analysisStore.size > analysisLimit) analysisStore.delete(analysisStore.keys().next().value)
+}
+const canStartAnalysisToday = () => {
   const today = new Date().toISOString().slice(0, 10)
   if (dailyUsage.date !== today) dailyUsage = { date: today, count: 0 }
-  const cap = clampInteger(process.env.READINESS_INSIGHT_DAILY_LIMIT, 1, 10000, 100)
+  const cap = clampInteger(process.env.MANUS_READINESS_DAILY_LIMIT, 1, 10000, 25)
   if (dailyUsage.count >= cap) return false
   dailyUsage.count += 1
   return true
 }
 
-const validateModelInsight = (rawInsight, guided) => {
+const validateStructuredInsight = (rawInsight, guided) => {
   const headline = compactText(rawInsight?.headline, 120)
   const paragraphs = Array.isArray(rawInsight?.paragraphs)
     ? rawInsight.paragraphs.map((paragraph) => compactText(paragraph, 700)).filter(Boolean)
@@ -165,15 +187,17 @@ const validateModelInsight = (rawInsight, guided) => {
   const discussionPrompt = compactText(rawInsight?.discussionPrompt, 300)
 
   if (!headline || paragraphs.length !== 3 || paragraphs.some((paragraph) => paragraph.length < 90) || !discussionPrompt) return null
-  return { ...guided, headline, paragraphs, discussionPrompt, source: 'ai' }
+  return { ...guided, headline, paragraphs, discussionPrompt, source: 'manus' }
 }
 
-const createModelPrompt = (answers, guided) => {
+const createAnalysisPrompt = (answers) => {
   const categories = calculateCategoryScores(answers)
   const answerSummary = answers.map((answer) => `- ${answer.label}: ${answer.selectedLabel}`).join('\n')
   const categorySummary = categories.map((category) => `- ${category.title}: ${category.score}/100`).join('\n')
 
-  return `Interpret this anonymous Grant Portfolio Risk & Readiness Snapshot for an Australian or New Zealand local-government or public-purpose grants team. The answers are self-reported and contain no personal, organisation, grant, funder, financial or document data.
+  return `You are preparing a concise, practical Grant Portfolio Risk & Readiness reflection for an Australian or New Zealand local-government or public-purpose grants team. Do not browse, use external tools, look up external sources, ask a question or take an external action. Work only from the anonymous self-reported pattern below.
+
+The pattern contains no name, email, organisation, grant, funder, financial, document, IP-address or free-text data.
 
 Category pattern:
 ${categorySummary}
@@ -181,55 +205,121 @@ ${categorySummary}
 Answer pattern:
 ${answerSummary}
 
-Return a concise, useful interpretation that is grounded only in this pattern. Write three paragraphs of 55–85 words. Paragraph one explains the most meaningful operating pattern. Paragraph two explains the likely coordination consequence without presenting it as fact. Paragraph three gives one proportionate, practical first move. Then add one short leadership-discussion prompt.
+Produce the structured output requested. Write exactly three plain-Australian-English paragraphs of 55–85 words: (1) the most meaningful operating pattern, (2) a likely coordination consequence framed as possibility rather than fact, and (3) one proportionate practical first move. Then write one short leadership-discussion question.
 
-Use plain Australian English. Do not mention AI, GrantMaestro, a score, laws, formal compliance, audit, certification, financial savings, security guarantees, or facts not supplied. Do not use bullets, markdown, jargon, fear, promises or calls to buy. Make clear through the wording that this is a practical reflection rather than a formal assessment.
-
-Return only a valid JSON object with this exact shape:
-{"headline":"...","paragraphs":["...","...","..."],"discussionPrompt":"..."}`
+Do not mention AI, Manus, GrantMaestro, a score, laws, formal compliance, audit, certification, financial savings, security guarantees, or facts not supplied. Do not use bullets, markdown, jargon, fear, promises or a sales call. Make clear through the wording that this is a practical reflection, not a formal assessment.`
 }
 
-const parseModelJson = (content) => {
-  const normalised = String(content || '')
-    .trim()
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/\s*```$/, '')
-  return JSON.parse(normalised)
+const requestManus = async (configuration, path, options = {}) => {
+  const abortController = new AbortController()
+  const timeoutId = setTimeout(() => abortController.abort(), configuration.requestTimeout)
+  try {
+    const response = await fetch(`${configuration.apiBase}${path}`, {
+      ...options,
+      headers: {
+        'content-type': 'application/json',
+        'x-manus-api-key': configuration.apiKey,
+        ...(options.headers || {}),
+      },
+      signal: abortController.signal,
+    })
+    const body = await response.json().catch(() => ({}))
+    if (!response.ok || body?.ok !== true) throw new Error(`Manus API request failed with ${response.status}`)
+    return body
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+const startManusTask = async (configuration, answers) => {
+  const response = await requestManus(configuration, '/v2/task.create', {
+    method: 'POST',
+    body: JSON.stringify({
+      title: 'GrantMaestro anonymous readiness reflection',
+      locale: 'en',
+      interactive_mode: false,
+      hide_in_task_list: true,
+      share_visibility: 'private',
+      agent_profile: configuration.profile,
+      message: { content: createAnalysisPrompt(answers) },
+      structured_output_schema: structuredInsightSchema,
+    }),
+  })
+  if (!response.task_id) throw new Error('Manus did not return a task ID.')
+  return response.task_id
+}
+
+const readManusTaskResult = async (configuration, taskId) => {
+  const response = await requestManus(configuration, `/v2/task.listMessages?task_id=${encodeURIComponent(taskId)}&order=desc&limit=50`, {
+    method: 'GET',
+  })
+  const events = Array.isArray(response.messages) ? response.messages : []
+  const structuredResult = events.find((event) => event?.type === 'structured_output_result')?.structured_output_result
+  if (structuredResult?.success) return { status: 'ready', value: structuredResult.value }
+  if (events.some((event) => event?.type === 'error_message' || event?.status_update?.agent_status === 'error' || event?.status_update?.agent_status === 'waiting')) return { status: 'unavailable' }
+  if (events.some((event) => event?.status_update?.agent_status === 'stopped')) return { status: 'unavailable' }
+  return { status: 'pending' }
 }
 
 /**
- * Uses a provider only when it is explicitly enabled in the server environment.
- * The model sees anonymous score/label data only. Failure always returns the
- * deterministic guided interpretation so visitors keep receiving value.
+ * Starts an optional Manus structured-analysis task. The visitor gets the
+ * guided reflection immediately; no contact or free-text data is submitted.
  */
-export const createReadinessInsight = async (answers) => {
+export const startReadinessInsightAnalysis = async (answers, requesterIp = '') => {
   const guided = buildGuidedReadinessInsight(answers)
   const key = cacheKeyFor(answers)
   const cached = getCached(key)
-  if (cached) return cached
+  if (cached) return { insight: cached, analysisStatus: 'ready' }
 
-  const configuration = readAiConfiguration()
-  if (!configuration.enabled || !canUseModelToday()) {
-    putCached(key, guided)
-    return guided
+  const configuration = readManusConfiguration()
+  if (!configuration.enabled || !canStartAnalysisToday()) return { insight: guided, analysisStatus: 'guided' }
+
+  try {
+    const taskId = await startManusTask(configuration, answers)
+    pruneAnalysisStore()
+    const analysisId = crypto.randomUUID()
+    analysisStore.set(analysisId, {
+      requesterIp: String(requesterIp || ''),
+      taskId,
+      key,
+      guided,
+      expiresAt: Date.now() + analysisLifetimeMs,
+    })
+    return { insight: guided, analysisStatus: 'pending', analysisId }
+  } catch (error) {
+    console.warn('[portfolio-readiness] Manus analysis unavailable; using guided interpretation.')
+    return { insight: guided, analysisStatus: 'guided' }
+  }
+}
+
+/**
+ * Reads a task result for the same anonymous visitor. The opaque analysis ID is
+ * short lived, held in memory only and never reveals the Manus task ID.
+ */
+export const readReadinessInsightAnalysis = async (analysisId, requesterIp = '') => {
+  pruneAnalysisStore()
+  const record = analysisStore.get(String(analysisId || ''))
+  if (!record || record.requesterIp !== String(requesterIp || '')) return null
+
+  const configuration = readManusConfiguration()
+  if (!configuration.enabled) {
+    analysisStore.delete(analysisId)
+    return { insight: record.guided, analysisStatus: 'guided' }
   }
 
   try {
-    const content = await callClaudeText({
-      model: configuration.model,
-      maxTokens: 800,
-      temperature: 0.2,
-      timeout: configuration.timeout,
-      systemPrompt: 'You are a careful public-sector grants operations adviser. Treat supplied scores as limited self-reported signals, not verified facts. Output only valid JSON.',
-      userPrompt: createModelPrompt(answers, guided),
-    })
-    const insight = validateModelInsight(parseModelJson(content), guided) || guided
-    putCached(key, insight)
-    return insight
+    const result = await readManusTaskResult(configuration, record.taskId)
+    if (result.status === 'pending') return { insight: record.guided, analysisStatus: 'pending' }
+
+    analysisStore.delete(analysisId)
+    const insight = result.status === 'ready'
+      ? validateStructuredInsight(result.value, record.guided) || record.guided
+      : record.guided
+    if (insight.source === 'manus') putCached(record.key, insight)
+    return { insight, analysisStatus: insight.source === 'manus' ? 'ready' : 'guided' }
   } catch (error) {
-    console.warn('[portfolio-readiness] AI interpretation unavailable; using guided interpretation.')
-    putCached(key, guided)
-    return guided
+    console.warn('[portfolio-readiness] Manus analysis result unavailable; using guided interpretation.')
+    analysisStore.delete(analysisId)
+    return { insight: record.guided, analysisStatus: 'guided' }
   }
 }

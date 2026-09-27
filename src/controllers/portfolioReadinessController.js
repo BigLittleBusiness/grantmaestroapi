@@ -2,7 +2,11 @@ import asyncHandler from '../middlewares/async.js'
 import sendEmail, { isMailConfigured, resolveMailConfig } from '../utils/mailHelper.js'
 import { getContactRecipient } from '../utils/contactRecipient.js'
 import { verifyTurnstile } from '../utils/turnstile.js'
-import { createReadinessInsight, normaliseReadinessAnswers } from '../utils/portfolioReadinessInsights.js'
+import {
+  normaliseReadinessAnswers,
+  readReadinessInsightAnalysis,
+  startReadinessInsightAnalysis,
+} from '../utils/portfolioReadinessInsights.js'
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const allowedRoles = new Set([
@@ -87,8 +91,23 @@ export const interpretPortfolioReadiness = asyncHandler(async (req, res) => {
     })
   }
 
-  const insight = await createReadinessInsight(answers)
-  return res.status(200).json({ status: true, data: insight })
+  const analysis = await startReadinessInsightAnalysis(answers, req.ip)
+  return res.status(200).json({
+    status: true,
+    data: analysis.insight,
+    analysisStatus: analysis.analysisStatus,
+    analysisId: analysis.analysisId || null,
+  })
+})
+
+/**
+ * Reads a short-lived Manus structured-analysis result for the same anonymous
+ * visitor. The public response never exposes a Manus task ID.
+ */
+export const getPortfolioReadinessInterpretationStatus = asyncHandler(async (req, res) => {
+  const analysis = await readReadinessInsightAnalysis(req.params.analysisId, req.ip)
+  if (!analysis) return res.status(404).json({ status: false, message: 'This readiness analysis is no longer available.' })
+  return res.status(200).json({ status: true, data: analysis.insight, analysisStatus: analysis.analysisStatus })
 })
 
 export const submitPortfolioReadinessRequest = asyncHandler(async (req, res) => {

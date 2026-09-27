@@ -8,7 +8,7 @@
     "dev": "nodemon src/index.js",
     "migrate:annual-billing": "node scripts/annualBillingMigration.js",
     "test:annual-billing": "node scripts/annualBillingSmokeTest.js",
-    "test:portfolio-readiness": "node scripts/portfolioReadinessSmokeTest.js && node scripts/portfolioReadinessInsightsSmokeTest.js && node scripts/portfolioReadinessClaudeSmokeTest.js",
+    "test:portfolio-readiness": "node scripts/portfolioReadinessSmokeTest.js && node scripts/portfolioReadinessInsightsSmokeTest.js && node scripts/portfolioReadinessManusSmokeTest.js",
     "test:claude-drafting": "node scripts/claudeDraftingSmokeTest.js"
   },
   "keywords": [],

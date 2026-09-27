@@ -55,18 +55,7 @@ const publicFormLimiter = rateLimit({
   message: { status: false, message: 'Too many requests have been submitted. Please try again later.' },
 })
 
-// The interpretation endpoint is anonymous and may optionally use a model.
-// Keep a distinct hourly throttle even when the provider is disabled.
-const readinessInsightLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 6,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { status: false, message: 'Too many readiness interpretations have been requested. Please try again later.' },
-})
 app.use('/v1/public/contact', publicFormLimiter)
-app.use('/v1/public/portfolio-readiness/interpretation', readinessInsightLimiter)
-app.use('/v1/public/portfolio-readiness', publicFormLimiter)
 app.use('/v1', apiLimiter)
 
 // Stripe signs the exact raw request payload, so this route must be registered

@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 
-process.env.READINESS_INSIGHT_AI_ENABLED = 'false'
+process.env.MANUS_READINESS_ANALYSIS_ENABLED = 'false'
+delete process.env.MANUS_API_KEY
 const {
   buildGuidedReadinessInsight,
-  createReadinessInsight,
   normaliseReadinessAnswers,
   readinessQuestionIds,
+  startReadinessInsightAnalysis,
 } = await import('../src/utils/portfolioReadinessInsights.js')
 
 const mixedAnswers = readinessQuestionIds.map((id, index) => ({ id, score: index % 4 }))
@@ -20,7 +21,8 @@ assert.equal(guided.paragraphs.length, 3)
 assert.ok(guided.paragraphs.every((paragraph) => paragraph.length > 90))
 assert.ok(guided.discussionPrompt.includes('next three material commitments'))
 
-const generated = await createReadinessInsight(answers)
-assert.equal(generated.source, 'guided')
-assert.equal(generated.paragraphs.length, 3)
-console.log('Portfolio readiness insight utility smoke tests passed.')
+const analysis = await startReadinessInsightAnalysis(answers, '203.0.113.20')
+assert.equal(analysis.analysisStatus, 'guided')
+assert.equal(analysis.insight.source, 'guided')
+assert.equal(analysis.insight.paragraphs.length, 3)
+console.log('Portfolio readiness guided insight smoke tests passed.')
