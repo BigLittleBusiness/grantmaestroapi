@@ -2,6 +2,7 @@ import asyncHandler from '../middlewares/async.js'
 import sendEmail, { isMailConfigured, resolveMailConfig } from '../utils/mailHelper.js'
 import { getContactRecipient } from '../utils/contactRecipient.js'
 import { verifyTurnstile } from '../utils/turnstile.js'
+import { createReadinessInsight, normaliseReadinessAnswers } from '../utils/portfolioReadinessInsights.js'
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const allowedRoles = new Set([
@@ -70,6 +71,24 @@ export const getPortfolioReadinessConfiguration = asyncHandler(async (req, res) 
       message: configured ? '' : 'Action-plan email delivery is temporarily unavailable. You can still use the on-screen priorities below.',
     },
   })
+})
+
+/**
+ * Returns a privacy-minimised, answer-specific interpretation before the
+ * optional lead form. Only fixed question IDs and integer answer scores are
+ * accepted; contact fields and free-text input cannot reach an AI provider.
+ */
+export const interpretPortfolioReadiness = asyncHandler(async (req, res) => {
+  const answers = normaliseReadinessAnswers(req.body?.answers)
+  if (!answers) {
+    return res.status(422).json({
+      status: false,
+      message: 'Please complete the readiness snapshot before requesting an interpretation.',
+    })
+  }
+
+  const insight = await createReadinessInsight(answers)
+  return res.status(200).json({ status: true, data: insight })
 })
 
 export const submitPortfolioReadinessRequest = asyncHandler(async (req, res) => {
