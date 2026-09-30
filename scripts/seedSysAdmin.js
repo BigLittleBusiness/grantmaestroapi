@@ -35,7 +35,7 @@ const ADMIN_EMAIL     = 'tizzbizz@gmail.com'
 const ADMIN_PASSWORD  = 'GMadmin@2026!'   // ← notified to user
 const ADMIN_FIRST     = 'Kristian'
 const ADMIN_LAST      = 'Admin'
-const SUPER_ADMIN_ROLE_ID = 2             // grant_user_roles: Super Admin
+const SUPER_ADMIN_ROLE_ID = 2             // grant_user_roles: Platform Admin
 
 const now = new Date()
 

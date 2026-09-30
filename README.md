@@ -117,8 +117,27 @@ This app currently does not have a migrations or seeders directory. Schema chang
 
 The deployment script seeds required data idempotently after the service is stable:
 
-- User roles: System Admin, Organization Admin, Team Member, Viewer
+- User roles (IDs match `src/utils/routeAccessHelper.js`): 1 Organisation Admin, 2 Platform Admin, 3 Team Member, 4 Acquittal Contributor
 - Subscription plans: Seat by Seat, Pro
+
+### Stripe Billing And GST
+
+Customers subscribe through Stripe hosted Checkout using the GrantMaestro products in Stripe (Starter, Professional, Enterprise; monthly and yearly; plus an extra-seat price for each). Prices are GST-exclusive: Stripe Tax adds 10% GST when the billing address is in Australia, including on every renewal. Organisations outside Australia are not charged GST.
+
+Per environment (test keys for local/UAT, live keys for production):
+
+1. **System Admin → Payment Settings → Stripe**: save the publishable and secret keys and enable Stripe checkout.
+2. **Stripe Dashboard → Tax**: complete the tax settings and add an active **Australia** registration. In live mode, add it yourself against the business ABN. Checkout stays disabled until the registration exists, so it can never take an Australian payment without GST.
+3. Link the Stripe prices to the app (idempotent; `--dry-run` to preview). In test mode, this also creates the Australian registration if it is missing:
+   ```bash
+   npm run stripe:setup
+   ```
+   The script matches products named `GrantMaestro <Starter|Professional|Enterprise> - <Monthly|Yearly>[ extra seat]`, assigns the lookup keys `grantmaestro_<starter|pro|enterprise>_[seat_]<month|year>`, marks them GST-exclusive and copies the prices into `grant_subscription_plans`. Run it again whenever prices change in Stripe.
+4. **Stripe Dashboard → Developers → Webhooks**: add `https://<api-host>/v1/subscription/stripe-webhook` with the events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `invoice.paid`, `customer.subscription.updated` and `customer.subscription.deleted`, then save the signing secret in Payment Settings. Renewals and cancellations rely on these events. For local testing, use `stripe listen --forward-to localhost:3001/v1/subscription/stripe-webhook`.
+
+To show your ABN on Stripe tax invoices, add it in Stripe Dashboard → Settings → Business → Tax details.
+
+The Stripe account is shared with other products, so the webhook only acts on objects whose metadata has `platform=grantmaestro`.
 
 ### Email / SES
 

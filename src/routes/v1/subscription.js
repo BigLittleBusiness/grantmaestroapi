@@ -10,7 +10,11 @@ import {
 } from '../../controllers/pinPaymentController.js'
 import { subscriptionExpiryDate } from '../../controllers/authController.js'
 import { validatePromoCode } from '../../controllers/adminPlansController.js'
-import { createCheckoutSession, getPaymentProvider } from '../../controllers/paymentController.js'
+import {
+  confirmCheckoutSession,
+  createCheckoutSession,
+  getPaymentProvider,
+} from '../../controllers/paymentController.js'
 
 const subscriptionRouter = express.Router()
 
@@ -61,6 +65,27 @@ subscriptionRouter.post(
  */
 subscriptionRouter.get('/payment-provider', protect, getPaymentProvider)
 subscriptionRouter.post('/create-checkout-session', protect, createCheckoutSession)
+
+/**
+ * @swagger
+ * /v1/subscription/checkout-session/{sessionId}:
+ *   get:
+ *     summary: Confirm a completed Stripe checkout session and return its totals (including GST).
+ *     tags:
+ *       - Subscription
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Checkout session status and totals.
+ */
+subscriptionRouter.get('/checkout-session/:sessionId', protect, confirmCheckoutSession)
 
 /**
  * @swagger

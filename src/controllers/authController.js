@@ -630,6 +630,9 @@ export const viewProfile = asyncHandler(async (req, res, next) => {
       'profile_image',
       'has_profile_updated',
       'position_text',
+      'preferred_subscription_plan_id',
+      'preferred_subscription_billing_interval',
+      'requires_password_reset',
     ],
     where: { is_deleted: 0, organization_id: organizationId, user_id: userId },
     include: [
@@ -692,6 +695,11 @@ export const viewProfile = asyncHandler(async (req, res, next) => {
     ? userInfo.user_role.role_id
     : ''
   userDetails.user_role = userInfo.user_role ? userInfo.user_role.name : ''
+  // Same subscription fields as the login response, so a page refresh restores them.
+  userDetails.preferred_subscription_plan_id = userInfo.preferred_subscription_plan_id || ''
+  userDetails.preferred_subscription_billing_interval =
+    userInfo.preferred_subscription_billing_interval || 'year'
+  userDetails.requires_password_reset = userInfo.requires_password_reset || 0
   res.send({
     success: true,
     message: 'Profile information',

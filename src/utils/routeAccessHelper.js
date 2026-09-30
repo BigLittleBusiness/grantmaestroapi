@@ -57,6 +57,7 @@ const routePathAccessUserTypes = {
   'ticket-status-update': platformAdministrators,
   'payment-provider': organisationAdministrators,
   'create-checkout-session': organisationAdministrators,
+  'checkout-session': organisationAdministrators,
   'create-charge': organisationAdministrators,
   'manage-grant-category': platformAdministrators,
   'grant-category-list': organisationUsers,

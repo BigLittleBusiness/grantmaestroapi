@@ -5,6 +5,7 @@ const { Op, User, UserRole, MasterData, Grant, Task, SubscriptionPlans } = base
 import sendEmail from '../utils/mailHelper.js'
 import { profileImageUrl } from '../utils/s3UrlHelper.js'
 import { ROLE } from '../utils/routeAccessHelper.js'
+import { getPurchasedExtraSeats } from './paymentController.js'
 
 /**
  * @description Add a new team member
@@ -52,7 +53,12 @@ export const addTeamMember = asyncHandler(async (req, res, next) => {
   const plan = req.user.preferred_subscription_plan_id
     ? await SubscriptionPlans.findOne({ where: { plan_id: req.user.preferred_subscription_plan_id, is_deleted: 0 } })
     : null
-  const totalSeats = plan ? (plan.admin_seats || 1) + (plan.team_seats || 3) : 4
+  const includedSeats = plan ? (plan.admin_seats || 1) + (plan.team_seats || 3) : 4
+  // Extra seats are only looked up from Stripe when the included seats are nearly used.
+  const nearIncludedCapacity = currentMemberCount >= Math.floor(includedSeats * 0.8)
+  const totalSeats = nearIncludedCapacity
+    ? includedSeats + await getPurchasedExtraSeats(req.user.organization_id)
+    : includedSeats
   // Warn admin when they are at 80% seat capacity
   if (currentMemberCount >= Math.floor(totalSeats * 0.8)) {
     sendEmail(
