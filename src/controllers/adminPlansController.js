@@ -10,6 +10,8 @@ import base from '../models/base.js'
 import { Op } from 'sequelize'
 import { calculateAnnualPrice } from '../utils/subscriptionBilling.js'
 import { isClaudeConfigured } from '../utils/anthropicClient.js'
+import { isMailConfigured, resolveMailConfig } from '../utils/mailHelper.js'
+import CommonHelper from '../utils/commonHelper.js'
 const { SubscriptionPlans, PromoCode } = base
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -267,13 +269,14 @@ export const getPlatformStats = asyncHandler(async (req, res) => {
   ])
 
   const configuredKeys = new Set(settings.filter((setting) => String(setting.setting_value || '').trim()).map((setting) => setting.setting_key))
+  const emailConfigured = isMailConfigured(await resolveMailConfig())
   const stripeEnabled = settings.some((setting) => setting.setting_key === 'stripe_enabled' && setting.setting_value === 'true')
   const integrationStatus = {
-    email: configuredKeys.has('ses_access_key_id') && configuredKeys.has('ses_secret_access_key') && configuredKeys.has('ses_from_email') ? 'configured' : 'needs_setup',
-    storage: process.env.AWS_S3_BUCKET && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ? 'configured' : 'needs_setup',
+    email: emailConfigured ? 'configured' : 'needs_setup',
+    storage: CommonHelper.isS3Configured ? 'configured' : 'needs_setup',
     payment: stripeEnabled && configuredKeys.has('stripe_secret_key') ? 'stripe_active' : configuredKeys.has('pin_secret_key') ? 'pin_configured' : 'needs_setup',
     ai: isClaudeConfigured() ? 'configured' : 'needs_setup',
-    scheduled_notifications: configuredKeys.has('ses_access_key_id') && configuredKeys.has('ses_secret_access_key') && configuredKeys.has('ses_from_email') ? 'ready_when_data_due' : 'blocked_by_email',
+    scheduled_notifications: emailConfigured ? 'ready_when_data_due' : 'blocked_by_email',
   }
 
   res.json({

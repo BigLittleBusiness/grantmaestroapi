@@ -1,8 +1,13 @@
 import base from '../models/base.js'
-import { decryptSetting } from './settingsCrypto.js'
+import { decryptSetting, encryptSetting } from './settingsCrypto.js'
 
 const { SystemSettings } = base
 
+/**
+ * Key/value platform settings (grant_system_settings). Secrets are stored
+ * AES-encrypted: pass `encrypted: true` when saving and they are decrypted
+ * transparently when read.
+ */
 export const getSystemSetting = async (key) => {
   const row = await SystemSettings.findOne({
     where: { setting_key: key, is_deleted: 0 },
@@ -20,7 +25,7 @@ export const setSystemSetting = async (key, value, {
   })
   const now = new Date()
   const payload = {
-    setting_value: value,
+    setting_value: encrypted ? encryptSetting(value) : value,
     setting_group: group,
     is_encrypted: encrypted ? 1 : 0,
     modified_at: now,

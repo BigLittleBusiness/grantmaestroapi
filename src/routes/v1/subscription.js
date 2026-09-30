@@ -1,14 +1,10 @@
 import express from 'express'
 import protect from '../../middlewares/auth.js'
-import {
-  createSubscriptionPlan,
-  fetchSubscriptionPlans,
-} from '../../controllers/subscriptionController.js'
+import { fetchSubscriptionPlans } from '../../controllers/subscriptionController.js'
 import {
   createPinCharge,
   pinWebhook,
 } from '../../controllers/pinPaymentController.js'
-import { subscriptionExpiryDate } from '../../controllers/authController.js'
 import { validatePromoCode } from '../../controllers/adminPlansController.js'
 import {
   confirmCheckoutSession,
@@ -33,25 +29,6 @@ subscriptionRouter.get('/fetch-subscription-plans', fetchSubscriptionPlans)
 
 /**
  * @swagger
- * /v1/subscription/update-subscription-expiry-date:
- *   post:
- *     summary: Update the subscription expiry date for a user.
- *     tags:
- *       - Subscription
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Subscription expiry date updated successfully.
- */
-subscriptionRouter.post(
-  '/update-subscription-expiry-date',
-  protect,
-  subscriptionExpiryDate
-)
-
-/**
- * @swagger
  * /v1/subscription/create-checkout-session:
  *   post:
  *     summary: Create a Stripe checkout session for subscription payment.
@@ -63,8 +40,19 @@ subscriptionRouter.post(
  *       200:
  *         description: Checkout session created successfully.
  */
-subscriptionRouter.get('/payment-provider', protect, getPaymentProvider)
 subscriptionRouter.post('/create-checkout-session', protect, createCheckoutSession)
+
+/**
+ * @swagger
+ * /v1/subscription/payment-provider:
+ *   get:
+ *     summary: The active payment provider (stripe or pin).
+ *     tags:
+ *       - Subscription
+ *     security:
+ *       - bearerAuth: []
+ */
+subscriptionRouter.get('/payment-provider', protect, getPaymentProvider)
 
 /**
  * @swagger
@@ -111,24 +99,5 @@ subscriptionRouter.post('/pin-webhook', pinWebhook)
 
 // Public — validate a promo code (no auth required)
 subscriptionRouter.post('/validate-promo', validatePromoCode)
-
-/**
- * @swagger
- * /v1/subscription/create-subscription-plan:
- *   post:
- *     summary: Create a new subscription plan.
- *     tags:
- *       - Subscription
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Subscription plan created successfully.
- */
-subscriptionRouter.post(
-  '/create-subscription-plan',
-  protect,
-  createSubscriptionPlan
-)
 
 export default subscriptionRouter

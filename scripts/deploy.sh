@@ -168,9 +168,9 @@ bootstrap_database() {
     {
       "name": "backend",
       "command": [
-        "node",
-        "-e",
-        "const mysql=require('mysql2/promise');(async()=>{const c=await mysql.createConnection({host:process.env.DB_HOST,port:Number(process.env.DB_PORT||3306),user:process.env.DB_USER,password:process.env.DB_PASSWORD,multipleStatements:true});const db=String(process.env.DB_NAME||'').replace(/`/g,'``');await c.query('CREATE DATABASE IF NOT EXISTS `'+db+'` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');console.log('database ready '+db);await c.end();})().catch(e=>{console.error(e);process.exit(1);});"
+        "sh",
+        "-c",
+        "node db/migrate.js && node db/seed.js"
       ]
     }
   ]
@@ -227,16 +227,16 @@ seed_required_data() {
     {
       "name": "backend",
       "command": [
-        "node",
-        "-e",
-        "const mysql=require('mysql2/promise');(async()=>{const c=await mysql.createConnection({host:process.env.DB_HOST,port:Number(process.env.DB_PORT||3306),user:process.env.DB_USER,password:process.env.DB_PASSWORD,database:process.env.DB_NAME});const roles=[[1,'Organisation Admin',0,0],[2,'Platform Admin',0,0],[3,'Team Member',0,0],[4,'Acquittal Contributor',0,0]];for(const r of roles){await c.execute('INSERT INTO grant_user_roles (role_id,name,is_blocked,is_deleted,created_at,modified_at) VALUES (?,?,?,?,NOW(),NOW()) ON DUPLICATE KEY UPDATE name=VALUES(name),is_blocked=0,is_deleted=0,modified_at=NOW()',r);}const plans=[[1,'Starter','Starter plan','month',99,990,20,1,3,'grantmaestro_starter',14],[2,'Pro','Pro plan','month',275,2750,18,2,10,'grantmaestro_pro',14],[3,'Enterprise','Enterprise plan','month',825,8250,15,5,20,'grantmaestro_enterprise',14]];for(const p of plans){await c.execute('INSERT IGNORE INTO grant_subscription_plans (plan_id,plan_name,plan_description,plan_duration,plan_price,annual_price,overage_rate,admin_seats,team_seats,stripe_plan_id,trial_days,is_blocked,is_deleted,created_at,modified_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,0,0,NOW(),NOW())',p);}console.log('required seed data ready');await c.end();})().catch(e=>{console.error(e);process.exit(1);});"
+        "sh",
+        "-c",
+        "node db/migrate.js && node db/seed.js"
       ]
     }
   ]
 }
 JSON
 
-  echo "Seeding required ${TARGET_ENV} RDS data using one-off backend task ${task_definition}"
+  echo "Running database migrations and seed data on ${TARGET_ENV} RDS using one-off backend task ${task_definition}"
   task_arn="$(run_aws ecs run-task \
     --cluster "$CLUSTER_NAME" \
     --task-definition "$task_definition" \
@@ -249,7 +249,7 @@ JSON
   rm -f "$network_file" "$overrides_file"
 
   if [[ -z "$task_arn" || "$task_arn" == "None" ]]; then
-    echo "Required seed data task was not started." >&2
+    echo "Database migration/seed task was not started." >&2
     return 1
   fi
 
@@ -261,7 +261,7 @@ JSON
     --output text)"
 
   if [[ "$exit_code" != "0" ]]; then
-    echo "Required seed data task failed for task ${task_arn} with exit code ${exit_code}." >&2
+    echo "Database migration/seed task failed for task ${task_arn} with exit code ${exit_code}." >&2
     print_service_diagnostics
     return 1
   fi

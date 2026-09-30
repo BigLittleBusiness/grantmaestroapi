@@ -38,6 +38,7 @@ const sequelize = new Sequelize(
     host: process.env.DB_HOST || 'localhost',
     port: Number(process.env.DB_PORT || 3306),
     dialect: 'mysql',
+    logging: process.env.DB_LOGGING === 'false' ? false : console.log,
     pool: {
       max: 10,
       min: 0,
@@ -48,9 +49,13 @@ const sequelize = new Sequelize(
 )
 
 //db creations
-sequelize.sync({ force: false }).then(() => {
+// Resolves once every model table exists. db/migrations awaits it; the API
+// keeps creating missing tables on startup as before.
+export const databaseReady = sequelize.sync({ force: false }).then(() => {
   console.log('Database and table created if not created')
 })
+
+export { sequelize }
 
 //start model declarations with DB connection
 const User = UserModel(sequelize, Sequelize)

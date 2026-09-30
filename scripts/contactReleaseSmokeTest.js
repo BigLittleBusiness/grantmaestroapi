@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import pug from 'pug'
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 const root = new URL('..', import.meta.url)
 const read = (relativePath) => readFile(new URL(relativePath, root), 'utf8')
@@ -28,9 +30,14 @@ const contactRoute = await read('src/routes/v1/contact.js')
 assert.match(contactRoute, /contactRouter\.post\('\/', submitContactEnquiry\)/)
 
 for (const template of ['contactEnquiry', 'supportTicketAlert']) {
-  const templatePath = new URL(`src/emails/${template}.pug`, root)
-  pug.compileFile(templatePath.pathname)
+  pug.compileFile(fileURLToPath(new URL(`src/emails/${template}.pug`, root)))
 }
+
+// The UI repository is checked out next to this one as frontend/ or grantmaestroui/.
+const frontendRoot = ['../../frontend/', '../../grantmaestroui/']
+  .map((folder) => new URL(folder, import.meta.url))
+  .find((url) => existsSync(url))
+assert.ok(frontendRoot, 'Frontend repository not found next to the backend (frontend/ or grantmaestroui/)')
 
 const frontendFiles = [
   'src/components/LandingPage/Footer.jsx',
@@ -38,7 +45,7 @@ const frontendFiles = [
   'src/pages/Auth/ForcePasswordReset.jsx',
 ]
 for (const file of frontendFiles) {
-  const contents = await read(new URL(`../../grantmaestroui/${file}`, import.meta.url).pathname)
+  const contents = await readFile(new URL(file, frontendRoot), 'utf8')
   assert.doesNotMatch(contents, /mailto:/i, `${file} must not expose a mailto link`)
 }
 

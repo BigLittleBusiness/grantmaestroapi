@@ -1,7 +1,7 @@
 import asyncHandler from '../middlewares/async.js'
 import base from '../models/base.js'
 import sendEmail from '../utils/mailHelper.js'
-import { getStripeConfiguration } from '../utils/systemSettings.js'
+import { getActivePaymentProvider, getStripeConfiguration } from '../utils/systemSettings.js'
 import {
   BILLING_INTERVAL,
   isBillingInterval,
@@ -250,13 +250,10 @@ export const getPurchasedExtraSeats = async (organizationId) => {
 }
 
 export const getPaymentProvider = asyncHandler(async (_req, res) => {
-  const stripeConfig = await getStripeConfiguration()
+  const provider = await getActivePaymentProvider()
   return res.status(200).json({
     status: true,
-    data: {
-      provider: stripeConfig.enabled && stripeConfig.secretKey ? 'stripe' : 'pin',
-      stripe_enabled: stripeConfig.enabled && Boolean(stripeConfig.secretKey),
-    },
+    data: { provider, stripe_enabled: provider === 'stripe' },
   })
 })
 

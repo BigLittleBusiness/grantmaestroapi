@@ -1,16 +1,21 @@
 {
   "name": "grant_manager_pro",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/index.js",
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "migrate:annual-billing": "node scripts/annualBillingMigration.js",
+    "db:migrate": "node db/migrate.js",
+    "db:seed": "node db/seed.js",
+    "db:setup": "node db/migrate.js && node db/seed.js",
+    "stripe:setup": "node scripts/stripeBillingSetup.js",
+    "notifications:run": "node scripts/notificationHealthCheck.js",
+    "test": "npm run test:annual-billing && npm run test:portfolio-readiness && npm run test:claude-drafting && npm run test:contact-release",
     "test:annual-billing": "node scripts/annualBillingSmokeTest.js",
     "test:portfolio-readiness": "node scripts/portfolioReadinessSmokeTest.js && node scripts/portfolioReadinessInsightsSmokeTest.js && node scripts/portfolioReadinessManusSmokeTest.js",
     "test:claude-drafting": "node scripts/claudeDraftingSmokeTest.js",
-    "stripe:setup": "node scripts/stripeBillingSetup.js"
+    "test:contact-release": "node scripts/contactReleaseSmokeTest.js"
   },
   "keywords": [],
   "author": "",
@@ -19,12 +24,10 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1068.0",
     "@aws-sdk/client-ses": "^3.1068.0",
-    "@stripe/stripe-js": "^7.1.0",
     "axios": "^1.18.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
-    "crypto": "^1.0.1",
     "dotenv": "^16.5.0",
     "email-templates": "^12.0.2",
     "express": "^4.21.2",

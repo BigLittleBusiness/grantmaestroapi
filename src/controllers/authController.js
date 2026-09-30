@@ -830,22 +830,6 @@ export const updateProfile = asyncHandler(async (req, res, next) => {
 })
 
 /**
- * @description Update the subscription expiry date
- * @route POST /auth/update-subscription-expiry-date
- * @access Private
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @returns {Object} Response with status and success message
- */
-export const subscriptionExpiryDate = asyncHandler(async (req, res) => {
-  res.send({
-    status: true,
-    message: 'Subscription expiry date updated successfully.',
-    data: {},
-  })
-})
-
-/**
  * @description Logout the user
  * @route POST /auth/logout
  * @access Private

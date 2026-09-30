@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import pug from 'pug'
+import { fileURLToPath } from 'node:url'
 
 const root = new URL('..', import.meta.url)
 const read = (relativePath) => readFile(new URL(relativePath, root), 'utf8')
@@ -31,7 +32,7 @@ assert.match(insightUtility, /\/v2\/task\.listMessages/)
 assert.doesNotMatch(insightUtility, /callClaudeText|ANTHROPIC_API_KEY|claude-/i)
 
 for (const template of ['portfolioReadinessActionPlan', 'portfolioReadinessLeadAlert']) {
-  pug.compileFile(new URL(`src/emails/${template}.pug`, root).pathname)
+  pug.compileFile(fileURLToPath(new URL(`src/emails/${template}.pug`, root)))
 }
 
 console.log('Portfolio readiness API smoke tests passed.')

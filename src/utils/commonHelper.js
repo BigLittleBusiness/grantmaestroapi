@@ -5,22 +5,21 @@ import path from "path";
 import Randomstring from "randomstring";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { encryptSetting as encrypt, decryptSetting as decrypt } from './settingsCrypto.js';
+import { awsCredentials, hasAwsCredentials } from './awsCredentials.js';
 
 // ---------------------------------------------------------------------------
 // Amazon S3 client
 // ---------------------------------------------------------------------------
 const S3_REGION = process.env.AWS_S3_REGION || process.env.AWS_REGION || 'ap-southeast-2';
 const S3_BUCKET = process.env.AWS_S3_BUCKET || '';
+// Static keys from config.env, or the ECS task role in UAT/production.
 const isS3Configured = Boolean(
-    S3_BUCKET && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+    S3_BUCKET && hasAwsCredentials(process.env.AWS_ACCESS_KEY_ID, process.env.AWS_SECRET_ACCESS_KEY)
 );
 const s3 = isS3Configured
     ? new S3Client({
         region: S3_REGION,
-        credentials: {
-            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        },
+        credentials: awsCredentials(process.env.AWS_ACCESS_KEY_ID, process.env.AWS_SECRET_ACCESS_KEY),
     })
     : null;
 

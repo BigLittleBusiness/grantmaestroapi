@@ -4,23 +4,14 @@ import Email from 'email-templates'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs'
-import base from '../models/base.js'
-import { decryptSetting } from './settingsCrypto.js'
+import { getSystemSetting as getStoredSetting } from './systemSettings.js'
+import { awsCredentials, hasAwsCredentials } from './awsCredentials.js'
 
-const { SystemSettings } = base
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const emailsPath = path.resolve(__dirname, '../emails')
 const logoBase64 = fs.readFileSync(path.join(emailsPath, 'logo.png'), 'base64')
 export const logoUrl = `data:image/png;base64,${logoBase64}`
-
-const getStoredSetting = async (key) => {
-  const row = await SystemSettings.findOne({
-    where: { setting_key: key, is_deleted: 0 },
-  })
-  if (!row) return null
-  return row.is_encrypted ? decryptSetting(row.setting_value) : row.setting_value
-}
 
 const resolveMailConfig = async () => {
   const [region, accessKeyId, secretAccessKey, fromEmail, fromName] = await Promise.all([
@@ -40,17 +31,15 @@ const resolveMailConfig = async () => {
   }
 }
 
+// Keys come from Email Settings or config.env; without them the ECS task role is used.
 const isMailConfigured = (config) => Boolean(
-  config.accessKeyId && config.secretAccessKey && config.fromEmail
+  config.fromEmail && hasAwsCredentials(config.accessKeyId, config.secretAccessKey)
 )
 
 const createTransporter = (config) => {
   const sesClient = new SESClient({
     region: config.region,
-    credentials: {
-      accessKeyId: config.accessKeyId,
-      secretAccessKey: config.secretAccessKey,
-    },
+    credentials: awsCredentials(config.accessKeyId, config.secretAccessKey),
   })
   return nodemailer.createTransport({
     SES: { ses: sesClient, aws: { SendRawEmailCommand } },
@@ -112,5 +101,5 @@ async function sendEmail(to, subject, templateName, templateData = {}, attachmen
   }
 }
 
-export { resolveMailConfig, isMailConfigured }
+export { resolveMailConfig, isMailConfigured, createTransporter }
 export default sendEmail

@@ -18,7 +18,7 @@
 import asyncHandler from '../middlewares/async.js'
 import axios from 'axios'
 import base from '../models/base.js'
-import { encryptSetting, decryptSetting } from '../utils/settingsCrypto.js'
+import { getSystemSetting as getSetting, setSystemSetting } from '../utils/systemSettings.js'
 import {
   calculateSubscriptionExpiry,
   getSubscriptionPrice,
@@ -26,18 +26,7 @@ import {
   normaliseBillingInterval,
 } from '../utils/subscriptionBilling.js'
 
-const { SystemSettings, User, SubscriptionPlans } = base
-
-// ---------------------------------------------------------------------------
-// Internal helper – retrieve a single setting value by key
-// ---------------------------------------------------------------------------
-const getSetting = async (key) => {
-  const row = await SystemSettings.findOne({
-    where: { setting_key: key, is_deleted: 0 },
-  })
-  if (!row) return null
-  return row.is_encrypted ? decryptSetting(row.setting_value) : row.setting_value
-}
+const { Op, SystemSettings, User, SubscriptionPlans } = base
 
 // ---------------------------------------------------------------------------
 // Internal helper – build the Pin Payments base URL from stored environment
@@ -75,20 +64,7 @@ export const savePinSettings = asyncHandler(async (req, res) => {
     })
   }
 
-  const upsert = async (key, value, group = 'payment', isEncrypted = false) => {
-    const storedValue = isEncrypted ? encryptSetting(value) : value
-    const existing = await SystemSettings.findOne({ where: { setting_key: key, is_deleted: 0 } })
-    if (existing) {
-      await existing.update({ setting_value: storedValue, is_encrypted: isEncrypted, modified_at: new Date() })
-    } else {
-      await SystemSettings.create({
-        setting_key: key,
-        setting_value: storedValue,
-        setting_group: group,
-        is_encrypted: isEncrypted,
-      })
-    }
-  }
+  const upsert = (key, value, group, encrypted) => setSystemSetting(key, value, { group, encrypted })
 
   await upsert('pin_publishable_key', pin_publishable_key, 'payment', false)
   await upsert('pin_secret_key',      pin_secret_key,      'payment', true)
@@ -114,7 +90,8 @@ export const savePinSettings = asyncHandler(async (req, res) => {
  */
 export const fetchPinSettings = asyncHandler(async (req, res) => {
   const rows = await SystemSettings.findAll({
-    where: { setting_group: 'payment', is_deleted: 0 },
+    // Stripe settings share the payment group; only return Pin Payments keys.
+    where: { setting_group: 'payment', setting_key: { [Op.startsWith]: 'pin_' }, is_deleted: 0 },
     attributes: ['setting_key', 'setting_value', 'is_encrypted'],
   })
 

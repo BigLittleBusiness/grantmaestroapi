@@ -126,7 +126,8 @@ const swaggerOptions = {
       version: '1.0.0',
       description: 'API documentation',
     },
-    servers: [{ url: 'http://localhost:3005' }],
+    // Same origin as the docs page, so "Try it out" works locally and when deployed.
+    servers: [{ url: '/' }],
     components: {
       securitySchemes: {
         bearerAuth: {

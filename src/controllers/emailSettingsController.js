@@ -10,37 +10,8 @@
  *   POST /v1/admin/email-settings/test    – send a test email
  */
 import asyncHandler from '../middlewares/async.js'
-import nodemailer from 'nodemailer'
-import { SESClient, SendRawEmailCommand } from '@aws-sdk/client-ses'
-import base from '../models/base.js'
-import { encryptSetting, decryptSetting } from '../utils/settingsCrypto.js'
-const { SystemSettings } = base
-
-// ── Internal helper ───────────────────────────────────────────────────────────
-const upsertSetting = async (key, value, group = 'email', isEncrypted = false) => {
-  const existing = await SystemSettings.findOne({ where: { setting_key: key, is_deleted: 0 } })
-  const now = new Date()
-  if (existing) {
-    await existing.update({ setting_value: value, is_encrypted: isEncrypted ? 1 : 0, modified_at: now })
-  } else {
-    await SystemSettings.create({
-      setting_key: key,
-      setting_value: value,
-      setting_group: group,
-      is_encrypted: isEncrypted ? 1 : 0,
-      is_blocked: 0,
-      is_deleted: 0,
-      created_at: now,
-      modified_at: now,
-    })
-  }
-}
-
-const getSetting = async (key) => {
-  const row = await SystemSettings.findOne({ where: { setting_key: key, is_deleted: 0 } })
-  if (!row) return null
-  return row.is_encrypted ? decryptSetting(row.setting_value) : row.setting_value
-}
+import { getSystemSetting as getSetting, setSystemSetting } from '../utils/systemSettings.js'
+import { createTransporter, isMailConfigured, resolveMailConfig } from '../utils/mailHelper.js'
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 export const fetchEmailSettings = asyncHandler(async (req, res) => {
@@ -71,24 +42,15 @@ export const saveEmailSettings = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Region, Access Key ID, and From Email are required.' })
   }
 
-  await upsertSetting('aws_ses_region',    aws_ses_region,    'email', false)
-  await upsertSetting('aws_access_key_id', aws_access_key_id, 'email', false)
-  await upsertSetting('from_email',        from_email,        'email', false)
-  await upsertSetting('from_name',         from_name || 'GrantMaestro', 'email', false)
+  await setSystemSetting('aws_ses_region', aws_ses_region, { group: 'email' })
+  await setSystemSetting('aws_access_key_id', aws_access_key_id, { group: 'email' })
+  await setSystemSetting('from_email', from_email, { group: 'email' })
+  await setSystemSetting('from_name', from_name || 'GrantMaestro', { group: 'email' })
 
   // Only update the secret key if a new value was provided
   if (aws_secret_access_key && aws_secret_access_key.trim() !== '') {
-    await upsertSetting('aws_secret_access_key', encryptSetting(aws_secret_access_key), 'email', true)
+    await setSystemSetting('aws_secret_access_key', aws_secret_access_key, { group: 'email', encrypted: true })
   }
-
-  // Reload env vars so mailHelper picks up new values immediately
-  process.env.AWS_SES_REGION           = aws_ses_region
-  process.env.AWS_ACCESS_KEY_ID        = aws_access_key_id
-  if (aws_secret_access_key && aws_secret_access_key.trim() !== '') {
-    process.env.AWS_SECRET_ACCESS_KEY  = aws_secret_access_key
-  }
-  process.env.FROM_EMAIL = from_email
-  process.env.FROM_NAME  = from_name || 'GrantMaestro'
 
   res.status(200).json({
     success: true,
@@ -109,35 +71,19 @@ export const testEmailSettings = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Recipient email address is required.' })
   }
 
-  // Load current settings from DB (in case env vars not yet set)
-  const [region, accessKeyId, secretKey, fromEmail, fromName] = await Promise.all([
-    getSetting('aws_ses_region'),
-    getSetting('aws_access_key_id'),
-    getSetting('aws_secret_access_key'),
-    getSetting('from_email'),
-    getSetting('from_name'),
-  ])
-
-  if (!accessKeyId || !secretKey || !fromEmail) {
+  // Same configuration and transport as every other outgoing email.
+  const config = await resolveMailConfig()
+  if (!isMailConfigured(config)) {
     return res.status(400).json({
       success: false,
       message: 'Email settings are not fully configured. Please save your AWS SES credentials first.',
     })
   }
 
-  const decryptedSecret = secretKey
-
   try {
-    const sesClient = new SESClient({
-      region: region || 'ap-southeast-2',
-      credentials: { accessKeyId, secretAccessKey: decryptedSecret },
-    })
-    const transporter = nodemailer.createTransport({
-      SES: { ses: sesClient, aws: { SendRawEmailCommand } },
-    })
-
+    const transporter = createTransporter(config)
     await transporter.sendMail({
-      from: `"${fromName || 'GrantMaestro'}" <${fromEmail}>`,
+      from: `"${config.fromName}" <${config.fromEmail}>`,
       to,
       subject: 'GrantMaestro — Email Configuration Test',
       html: `

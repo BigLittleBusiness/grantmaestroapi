@@ -1,51 +1,36 @@
-import '../src/env.js'
-import mysql from 'mysql2/promise'
+import { addColumnIfMissing } from './helpers.js'
 
-const connection = await mysql.createConnection({
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT || 3306),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-})
-
-const ensureColumn = async (name, definition) => {
-  const [rows] = await connection.query('SHOW COLUMNS FROM grant_organization_grants LIKE ?', [name])
-  if (!rows.length) {
-    await connection.query(`ALTER TABLE grant_organization_grants ADD COLUMN ${definition}`)
-    console.log(`Added grant_organization_grants.${name}`)
+/** Grant workflow fields, the accountable officer link and acquittal items. */
+export const up = async ({ connection }) => {
+  const columns = [
+    ['workflow_stage', "VARCHAR(32) NOT NULL DEFAULT 'opportunity' AFTER account_used_for_expenses"],
+    ['next_action', 'TEXT NULL AFTER workflow_stage'],
+    ['next_action_due_date', 'DATE NULL AFTER next_action'],
+    ['accountable_user_id', 'INT UNSIGNED NULL AFTER next_action_due_date'],
+    ['risk_status', "VARCHAR(32) NOT NULL DEFAULT 'on_track' AFTER accountable_user_id"],
+    ['strategic_priority', 'VARCHAR(255) NULL AFTER risk_status'],
+  ]
+  for (const [column, definition] of columns) {
+    await addColumnIfMissing(connection, 'grant_organization_grants', column, definition)
   }
-}
 
-try {
-  await connection.beginTransaction()
-
-  await ensureColumn('workflow_stage', "workflow_stage VARCHAR(32) NOT NULL DEFAULT 'opportunity' AFTER account_used_for_expenses")
-  await ensureColumn('next_action', 'next_action TEXT NULL AFTER workflow_stage')
-  await ensureColumn('next_action_due_date', 'next_action_due_date DATE NULL AFTER next_action')
-  await ensureColumn('accountable_user_id', 'accountable_user_id INT UNSIGNED NULL AFTER next_action_due_date')
-  await ensureColumn('risk_status', "risk_status VARCHAR(32) NOT NULL DEFAULT 'on_track' AFTER accountable_user_id")
-  await ensureColumn('strategic_priority', 'strategic_priority VARCHAR(255) NULL AFTER risk_status')
-
-  const [indexes] = await connection.query("SHOW INDEX FROM grant_organization_grants WHERE Key_name = 'idx_grant_accountable_user'")
+  const [indexes] = await connection.query(
+    "SHOW INDEX FROM grant_organization_grants WHERE Key_name = 'idx_grant_accountable_user'"
+  )
   if (!indexes.length) {
     await connection.query('CREATE INDEX idx_grant_accountable_user ON grant_organization_grants (accountable_user_id)')
   }
 
   const [constraints] = await connection.query(`
-    SELECT CONSTRAINT_NAME
-    FROM information_schema.KEY_COLUMN_USAGE
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'grant_organization_grants'
-      AND COLUMN_NAME = 'accountable_user_id'
-      AND REFERENCED_TABLE_NAME = 'grant_users'
+    SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'grant_organization_grants'
+      AND COLUMN_NAME = 'accountable_user_id' AND REFERENCED_TABLE_NAME = 'grant_users'
   `)
   if (!constraints.length) {
     await connection.query(`
       ALTER TABLE grant_organization_grants
       ADD CONSTRAINT fk_grant_accountable_user
-      FOREIGN KEY (accountable_user_id) REFERENCES grant_users(user_id)
-      ON DELETE SET NULL
+      FOREIGN KEY (accountable_user_id) REFERENCES grant_users(user_id) ON DELETE SET NULL
     `)
   }
 
@@ -85,13 +70,4 @@ try {
     END
     WHERE workflow_stage IS NULL OR workflow_stage = '' OR workflow_stage = 'opportunity'
   `)
-
-  await connection.commit()
-  console.log('Council UX migration completed successfully.')
-} catch (error) {
-  await connection.rollback()
-  console.error('Council UX migration failed:', error.message)
-  process.exitCode = 1
-} finally {
-  await connection.end()
 }

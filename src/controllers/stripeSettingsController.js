@@ -3,7 +3,7 @@
  *
  * Handles Stripe credentials storage and connection testing for the
  * Super Admin dashboard. Credentials are stored in grant_system_settings
- * using the same AES-256-CBC encryption already used for Pin Payments.
+ * (utils/systemSettings.js); secret values are AES-256-CBC encrypted.
  *
  * Routes:
  *   GET  /v1/admin/stripe-settings/fetch
@@ -12,25 +12,9 @@
  */
 import asyncHandler from '../middlewares/async.js'
 import axios from 'axios'
-import base from '../models/base.js'
-import { encryptSetting, decryptSetting } from '../utils/settingsCrypto.js'
-const { SystemSettings } = base
+import { getSystemSetting as getSetting, setSystemSetting } from '../utils/systemSettings.js'
 
-const upsertSetting = async (key, value, isEncrypted = false) => {
-  const existing = await SystemSettings.findOne({ where: { setting_key: key, is_deleted: 0 } })
-  const storedValue = isEncrypted ? encryptSetting(value) : value
-  if (existing) {
-    await existing.update({ setting_value: storedValue, is_encrypted: isEncrypted ? 1 : 0 })
-  } else {
-    await SystemSettings.create({ setting_key: key, setting_value: storedValue, is_encrypted: isEncrypted ? 1 : 0, is_deleted: 0 })
-  }
-}
-
-const getSetting = async (key) => {
-  const row = await SystemSettings.findOne({ where: { setting_key: key, is_deleted: 0 } })
-  if (!row) return null
-  return row.is_encrypted ? decryptSetting(row.setting_value) : row.setting_value
-}
+const saveSetting = (key, value, encrypted = false) => setSystemSetting(key, value, { group: 'payment', encrypted })
 
 // ─── GET /v1/admin/stripe-settings/fetch ────────────────────────────────────
 export const fetchStripeSettings = asyncHandler(async (req, res) => {
@@ -78,17 +62,17 @@ export const saveStripeSettings = asyncHandler(async (req, res) => {
   }
 
   if (stripe_publishable_key !== undefined)
-    await upsertSetting('stripe_publishable_key', stripe_publishable_key, false)
+    await saveSetting('stripe_publishable_key', stripe_publishable_key, false)
   if (stripe_environment !== undefined)
-    await upsertSetting('stripe_environment', stripe_environment, false)
+    await saveSetting('stripe_environment', stripe_environment, false)
   if (stripe_currency !== undefined)
-    await upsertSetting('stripe_currency', stripe_currency, false)
+    await saveSetting('stripe_currency', stripe_currency, false)
   if (stripe_secret_key && !stripe_secret_key.startsWith('•'))
-    await upsertSetting('stripe_secret_key', stripe_secret_key, true)
+    await saveSetting('stripe_secret_key', stripe_secret_key, true)
   if (stripe_webhook_secret && !stripe_webhook_secret.startsWith('•'))
-    await upsertSetting('stripe_webhook_secret', stripe_webhook_secret, true)
+    await saveSetting('stripe_webhook_secret', stripe_webhook_secret, true)
   if (stripe_enabled !== undefined)
-    await upsertSetting('stripe_enabled', enableStripe ? 'true' : 'false', false)
+    await saveSetting('stripe_enabled', enableStripe ? 'true' : 'false', false)
 
   res.status(200).json({ success: true, message: 'Stripe settings saved successfully.' })
 })
