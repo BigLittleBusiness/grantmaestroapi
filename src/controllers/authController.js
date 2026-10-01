@@ -1,4 +1,9 @@
 import asyncHandler from '../middlewares/async.js'
+import {
+  EXPIRED_MEMBER_MESSAGE,
+  canRenewSubscription,
+  isSubscriptionExpired,
+} from '../utils/subscriptionAccess.js'
 import base from '../models/base.js'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
@@ -243,16 +248,14 @@ export const login = asyncHandler(async (req, res, next) => {
   // const refreshToken = jwt.sign({ id: user.user_id }, process.env.JWT_SECRET, {
   //   expiresIn: '24h', // 24 hours
   // })
-  let subscriptionStatus = true
-  const subExpDate = user.subscription_expiry_date
-  if (new Date() > new Date(subExpDate)) {
-    subscriptionStatus = false
-  }
-  if (subscriptionStatus === false && user.user_type !== 2) {
+  // An expired Organisation Admin may still sign in, but only to subscribe
+  // (enforced by the auth middleware); other expired users are refused.
+  const subscriptionExpired = isSubscriptionExpired(user)
+  const subscriptionStatus = !subscriptionExpired
+  if (subscriptionExpired && !canRenewSubscription(user)) {
     return res.send({
       status: false,
-      message:
-        'your subscription has expired, please contact your administrator',
+      message: EXPIRED_MEMBER_MESSAGE,
     })
   }
   //update user details
@@ -295,6 +298,9 @@ export const login = asyncHandler(async (req, res, next) => {
   userDetails.preferred_subscription_billing_interval =
     user.preferred_subscription_billing_interval || 'year'
   userDetails.subscription_status = subscriptionStatus
+  userDetails.subscription_expired = subscriptionExpired
+  userDetails.subscription_expiry_date = user.subscription_expiry_date
+  userDetails.subscription_is_in_trial = Boolean(user.subscription_is_in_trial)
   userDetails.requires_password_reset = user.requires_password_reset || 0
   const accessToken = jwt.sign({ id: user.user_id }, process.env.JWT_SECRET, {
     expiresIn: '30m',
@@ -633,6 +639,9 @@ export const viewProfile = asyncHandler(async (req, res, next) => {
       'preferred_subscription_plan_id',
       'preferred_subscription_billing_interval',
       'requires_password_reset',
+      'user_type',
+      'subscription_expiry_date',
+      'subscription_is_in_trial',
     ],
     where: { is_deleted: 0, organization_id: organizationId, user_id: userId },
     include: [
@@ -700,6 +709,10 @@ export const viewProfile = asyncHandler(async (req, res, next) => {
   userDetails.preferred_subscription_billing_interval =
     userInfo.preferred_subscription_billing_interval || 'year'
   userDetails.requires_password_reset = userInfo.requires_password_reset || 0
+  userDetails.subscription_expired = isSubscriptionExpired(userInfo)
+  userDetails.subscription_status = !userDetails.subscription_expired
+  userDetails.subscription_expiry_date = userInfo.subscription_expiry_date
+  userDetails.subscription_is_in_trial = Boolean(userInfo.subscription_is_in_trial)
   res.send({
     success: true,
     message: 'Profile information',

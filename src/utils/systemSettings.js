@@ -60,7 +60,9 @@ export const getStripeConfiguration = async () => {
   }
 }
 
+/** 'stripe' when enabled, else 'pin' when Pin Payments is configured, else 'none'. */
 export const getActivePaymentProvider = async () => {
   const stripe = await getStripeConfiguration()
-  return stripe.enabled && stripe.secretKey ? 'stripe' : 'pin'
+  if (stripe.enabled && stripe.secretKey) return 'stripe'
+  return await getSystemSetting('pin_secret_key') ? 'pin' : 'none'
 }

@@ -7,6 +7,11 @@ import {
 } from '../../controllers/pinPaymentController.js'
 import { validatePromoCode } from '../../controllers/adminPlansController.js'
 import {
+  changeSubscriptionPlan,
+  createBillingPortalSession,
+  getSubscriptionDetails,
+} from '../../controllers/billingController.js'
+import {
   confirmCheckoutSession,
   createCheckoutSession,
   getPaymentProvider,
@@ -96,6 +101,42 @@ subscriptionRouter.post('/create-charge', protect, createPinCharge)
  *       - Subscription
  */
 subscriptionRouter.post('/pin-webhook', pinWebhook)
+
+/**
+ * @swagger
+ * /v1/subscription/subscription-details:
+ *   get:
+ *     summary: The organisation's plan, subscription status, seats, next charge and invoices.
+ *     tags:
+ *       - Subscription
+ *     security:
+ *       - bearerAuth: []
+ */
+subscriptionRouter.get('/subscription-details', protect, getSubscriptionDetails)
+
+/**
+ * @swagger
+ * /v1/subscription/change-plan:
+ *   post:
+ *     summary: Preview (default) or apply (confirm true) a plan, billing interval or extra-seat change.
+ *     tags:
+ *       - Subscription
+ *     security:
+ *       - bearerAuth: []
+ */
+subscriptionRouter.post('/change-plan', protect, changeSubscriptionPlan)
+
+/**
+ * @swagger
+ * /v1/subscription/billing-portal:
+ *   post:
+ *     summary: Create a Stripe customer portal session (payment method, invoices, cancellation).
+ *     tags:
+ *       - Subscription
+ *     security:
+ *       - bearerAuth: []
+ */
+subscriptionRouter.post('/billing-portal', protect, createBillingPortalSession)
 
 // Public — validate a promo code (no auth required)
 subscriptionRouter.post('/validate-promo', validatePromoCode)

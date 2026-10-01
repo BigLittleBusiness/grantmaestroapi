@@ -17,7 +17,8 @@
  *      In test mode a missing registration is created; in live mode it must
  *      be added in Stripe Dashboard → Tax → Registrations (it is a legal
  *      declaration against the business ABN), and the script stops.
- *   4. Updates grant_subscription_plans so displayed prices match Stripe.
+ *   4. Creates the customer portal configuration (card, invoices, cancellation).
+ *   5. Updates grant_subscription_plans so displayed prices match Stripe.
  *
  * The secret key is read from grant_system_settings, or STRIPE_SECRET_KEY if set.
  */
@@ -29,6 +30,7 @@ import {
   STRIPE_PLATFORM,
   GST_COUNTRY,
   createStripeClient,
+  ensureBillingPortalConfiguration,
   findGstRegistration,
   normalisePlanKey,
   planLookupKey,
@@ -143,7 +145,13 @@ try {
     fail('No active Australian registration in Stripe Tax. Add it in Stripe Dashboard → Tax → Registrations → Australia; checkout stays disabled until then.')
   }
 
-  // 4. Keep the plan table's displayed prices in line with Stripe.
+  // 4. Customer portal used by the Subscription page's "Manage billing".
+  if (!dryRun) {
+    const portal = await ensureBillingPortalConfiguration(stripe)
+    console.log(`Customer portal configuration: ${portal.id}`)
+  }
+
+  // 5. Keep the plan table's displayed prices in line with Stripe.
   console.log('\nSubscription plans:')
   const [plans] = await connection.query(
     'SELECT plan_id, plan_name, plan_price, annual_price, overage_rate, stripe_plan_id FROM grant_subscription_plans WHERE is_deleted = 0 ORDER BY plan_id'

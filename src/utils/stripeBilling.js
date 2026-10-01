@@ -56,6 +56,16 @@ export const planLookupKey = (prefix, interval) => `${prefix}_${interval}`
 export const seatLookupKey = (prefix, interval) => `${prefix}_seat_${interval}`
 export const isSeatPrice = (price) => /_seat_(month|year)$/.test(String(price?.lookup_key || ''))
 
+/** The plan lookup prefix a price belongs to, e.g. "grantmaestro_pro", or null. */
+export const planPrefixFromPrice = (price) => {
+  const match = /^(grantmaestro_(?:starter|pro|enterprise))_(?:seat_)?(?:month|year)$/.exec(String(price?.lookup_key || ''))
+  return match ? match[1] : null
+}
+
+/** Sum of the tax on an invoice or invoice preview, in cents. */
+export const getInvoiceTax = (invoice) => (invoice?.total_taxes || [])
+  .reduce((total, tax) => total + Number(tax.amount || 0), 0)
+
 /**
  * Fetches the plan price and extra-seat price for a plan and billing interval.
  * Throws a descriptive error when either price is missing or misconfigured.
@@ -109,6 +119,41 @@ export const assertGstCollectionReady = async (stripe, cacheKey = 'default') => 
     throw new Error('Stripe Tax has no active Australian (GST) registration.')
   }
   gstReadyCache.set(cacheKey, Date.now())
+}
+
+const portalConfigurationCache = new Map()
+
+/**
+ * The customer portal configuration used by GrantMaestro (created on first use):
+ * payment method, billing details, invoices and cancellation at period end.
+ * Plan and seat changes are made in the app instead, because the portal cannot
+ * update subscriptions with more than one item (plan + extra seats).
+ */
+export const ensureBillingPortalConfiguration = async (stripe, cacheKey = 'default') => {
+  if (portalConfigurationCache.has(cacheKey)) return portalConfigurationCache.get(cacheKey)
+  let configuration = null
+  for await (const candidate of stripe.billingPortal.configurations.list({ active: true, limit: 100 })) {
+    if (candidate.metadata?.platform === STRIPE_PLATFORM) { configuration = candidate; break }
+  }
+  configuration ||= await stripe.billingPortal.configurations.create({
+    business_profile: { headline: 'Manage your GrantMaestro billing' },
+    features: {
+      customer_update: { enabled: true, allowed_updates: ['name', 'address', 'tax_id'] },
+      invoice_history: { enabled: true },
+      payment_method_update: { enabled: true },
+      subscription_cancel: {
+        enabled: true,
+        mode: 'at_period_end',
+        cancellation_reason: {
+          enabled: true,
+          options: ['too_expensive', 'missing_features', 'switched_service', 'unused', 'other'],
+        },
+      },
+    },
+    metadata: { platform: STRIPE_PLATFORM },
+  })
+  portalConfigurationCache.set(cacheKey, configuration)
+  return configuration
 }
 
 /**

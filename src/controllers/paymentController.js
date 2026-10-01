@@ -19,6 +19,7 @@ import {
   getSubscriptionPeriodEnd,
   getSubscriptionPeriodStart,
   isSeatPrice,
+  planPrefixFromPrice,
   resolvePlanPrices,
   toSydneyDateOnly,
 } from '../utils/stripeBilling.js'
@@ -26,7 +27,7 @@ import {
 const { Op, User, SubscriptionPlans, PromoCode } = base
 
 // Stripe subscription statuses that grant access to GrantMaestro.
-const ACCESS_STATUSES = ['active', 'trialing', 'past_due']
+export const ACCESS_STATUSES = ['active', 'trialing', 'past_due']
 // Statuses that end access. "incomplete" is ignored: the first payment has not succeeded yet.
 const ENDED_STATUSES = ['canceled', 'unpaid', 'incomplete_expired', 'paused']
 
@@ -42,7 +43,7 @@ const validatePromo = async (code) => {
   return promo
 }
 
-const getEnabledStripe = async () => {
+export const getEnabledStripe = async () => {
   const config = await getStripeConfiguration()
   if (!config.enabled || !config.secretKey) return { config, stripe: null }
   return { config, stripe: createStripeClient(config.secretKey) }
@@ -76,13 +77,27 @@ const getOrCreateCustomer = async (stripe, user) => {
   return customer
 }
 
-const hasLiveSubscription = async (stripe, subscriptionId) => {
-  if (!subscriptionId) return false
+/**
+ * The organisation member whose Stripe subscription covers the organisation
+ * (any Organisation Admin may have paid), or null.
+ */
+export const findOrganisationPayer = (user) => User.findOne({
+  where: {
+    ...(user.organization_id ? { organization_id: user.organization_id } : { user_id: user.user_id }),
+    is_deleted: 0,
+    stripe_subscription_id: { [Op.ne]: null, [Op.notIn]: [''] },
+  },
+  order: [['modified_at', 'DESC']],
+})
+
+/** The organisation's current Stripe subscription (any status), or null. */
+export const getOrganisationSubscription = async (stripe, user, expand = []) => {
+  const payer = await findOrganisationPayer(user)
+  if (!payer) return null
   try {
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-    return ACCESS_STATUSES.includes(subscription.status)
+    return await stripe.subscriptions.retrieve(payer.stripe_subscription_id, { expand })
   } catch (error) {
-    if (error?.statusCode === 404) return false
+    if (error?.statusCode === 404) return null
     throw error
   }
 }
@@ -114,7 +129,7 @@ const sendActivationEmail = async (user, plan, subscription) => {
  * Safe to call repeatedly (webhook retries, success-page confirmation): the
  * activation email is only sent the first time a subscription is recorded.
  */
-const syncStripeSubscription = async (subscription) => {
+export const syncStripeSubscription = async (subscription) => {
   if (!isGrantMaestroObject(subscription)) return null
   if (!ACCESS_STATUSES.includes(subscription.status) && !ENDED_STATUSES.includes(subscription.status)) {
     return null
@@ -153,8 +168,12 @@ const syncStripeSubscription = async (subscription) => {
     return { user, hasAccess }
   }
 
-  const planId = Number(subscription.metadata.plan_id) || user.subscription_plan_id
   const planItem = subscription.items?.data?.find((item) => !isSeatPrice(item.price))
+  // The price identifies the plan, so plan changes made after checkout sync correctly.
+  const pricedPlan = await SubscriptionPlans.findOne({
+    where: { stripe_plan_id: planPrefixFromPrice(planItem?.price) || '', is_deleted: 0 },
+  })
+  const planId = pricedPlan?.plan_id || Number(subscription.metadata.plan_id) || user.subscription_plan_id
   const interval = normaliseBillingInterval(planItem?.price?.recurring?.interval || subscription.metadata.billing_interval)
   const periodEnd = getSubscriptionPeriodEnd(subscription)
   const periodStart = getSubscriptionPeriodStart(subscription)
@@ -219,7 +238,7 @@ const syncStripeSubscription = async (subscription) => {
   return { user, hasAccess }
 }
 
-const retrieveSubscription = (stripe, subscriptionId) => stripe.subscriptions.retrieve(subscriptionId, {
+export const retrieveSubscription = (stripe, subscriptionId) => stripe.subscriptions.retrieve(subscriptionId, {
   expand: ['latest_invoice'],
 })
 
@@ -232,17 +251,8 @@ export const getPurchasedExtraSeats = async (organizationId) => {
   try {
     const { stripe } = await getEnabledStripe()
     if (!stripe) return 0
-    const payer = await User.findOne({
-      where: {
-        organization_id: organizationId,
-        is_deleted: 0,
-        stripe_subscription_id: { [Op.ne]: null, [Op.notIn]: [''] },
-      },
-      order: [['modified_at', 'DESC']],
-    })
-    if (!payer) return 0
-    const subscription = await stripe.subscriptions.retrieve(payer.stripe_subscription_id)
-    return ACCESS_STATUSES.includes(subscription.status) ? getExtraSeatQuantity(subscription) : 0
+    const subscription = await getOrganisationSubscription(stripe, { organization_id: organizationId })
+    return subscription && ACCESS_STATUSES.includes(subscription.status) ? getExtraSeatQuantity(subscription) : 0
   } catch (error) {
     console.error('[stripe] Unable to read purchased seats:', error.message)
     return 0
@@ -306,10 +316,11 @@ export const createCheckoutSession = asyncHandler(async (req, res) => {
   }
 
   const user = await User.findOne({ where: { user_id: req.user.user_id, is_deleted: 0 } })
-  if (await hasLiveSubscription(stripe, user.stripe_subscription_id)) {
+  const existing = await getOrganisationSubscription(stripe, user)
+  if (existing && ACCESS_STATUSES.includes(existing.status)) {
     return res.status(409).json({
       status: false,
-      message: 'Your organisation already has an active subscription. Please contact support to change your plan or seats.',
+      message: 'Your organisation already has an active subscription. Change your plan or seats on the Subscription page.',
     })
   }
 

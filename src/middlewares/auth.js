@@ -2,6 +2,13 @@ import jwt from 'jsonwebtoken'
 import { jwtDecode } from 'jwt-decode'
 import base from '../models/base.js'
 import { validateRouteAccess } from '../utils/routeAccessHelper.js'
+import {
+  EXPIRED_ADMIN_MESSAGE,
+  EXPIRED_MEMBER_MESSAGE,
+  canRenewSubscription,
+  isBillingRoute,
+  isSubscriptionExpired,
+} from '../utils/subscriptionAccess.js'
 
 const { User } = base
 
@@ -12,6 +19,11 @@ const isTokenExpired = (token) => {
   } catch (_err) {
     return true
   }
+}
+
+const clearSessionCookies = (res) => {
+  res.clearCookie('accessToken', { httpOnly: true, secure: true, sameSite: 'None' })
+  res.clearCookie('refreshToken', { httpOnly: true, secure: true, sameSite: 'None' })
 }
 
 const protect = async (req, res, next) => {
@@ -42,6 +54,17 @@ const protect = async (req, res, next) => {
 
     if (!validateRouteAccess(accessPath, user.user_type)) {
       return res.status(403).json({ success: false, message: 'You do not have permission to access this resource.' })
+    }
+
+    if (isSubscriptionExpired(user)) {
+      if (!canRenewSubscription(user)) {
+        clearSessionCookies(res)
+        return res.status(401).json({ success: false, code: 'SUBSCRIPTION_EXPIRED', message: EXPIRED_MEMBER_MESSAGE })
+      }
+      // The Organisation Admin keeps a session so they can pay; nothing else.
+      if (!isBillingRoute(accessPath.split('/')[0])) {
+        return res.status(402).json({ success: false, code: 'SUBSCRIPTION_EXPIRED', message: EXPIRED_ADMIN_MESSAGE })
+      }
     }
 
     req.user = user

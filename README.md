@@ -136,9 +136,19 @@ Per environment (test keys for local/UAT, live keys for production):
 
 How subscriptions behave:
 
+- Registration starts a free trial of the plan's `trial_days` (14). The expiry date is stored on every user in the organisation. Reminder emails are sent 14 and 3 days before it.
 - A payment gives the whole organisation access until the end of the paid period, plus 3 days' grace for renewal retries.
+- Once the expiry date passes, the rules in `src/utils/subscriptionAccess.js` apply. They are enforced at login and on every API request:
+  - The Organisation Admin can still sign in, but every API call except the billing ones (profile, checkout, payment provider, logout, password) returns `402` with `code: SUBSCRIPTION_EXPIRED`. The frontend then sends them to checkout.
+  - Other organisation users cannot sign in. Any session they already have is ended (`401`, same code).
+  - The Platform Admin is never affected.
 - A cancelled or unpaid subscription ends access on the day it ends.
-- Changing plan or seat count after subscribing is not self-service yet; the checkout asks existing subscribers to contact support.
+- A subscription belongs to the organisation. Any Organisation Admin sees and manages it, and checkout refuses a second live subscription.
+- The Subscription page uses three endpoints (`src/controllers/billingController.js`):
+  - `GET /v1/subscription/subscription-details`: plan, status, seats, next payment (incl. GST), card, invoices.
+  - `POST /v1/subscription/change-plan`: change plan, billing interval or extra seats. Without `confirm` it returns a preview of the prorated charge or credit, incl. GST. With `confirm: true` it applies the change. Upgrades are charged immediately (`proration_behavior: always_invoice`), and the change only takes effect if that payment succeeds (`pending_if_incomplete`). Downgrades become account credit. The seat count can't drop below the organisation's users.
+  - `POST /v1/subscription/billing-portal`: opens the Stripe customer portal to update the card and billing details (incl. ABN), view invoices, or cancel at the end of the period.
+- The portal can't change subscriptions with more than one item (plan + extra seats), so plan and seat changes are made in the app. `npm run stripe:setup` creates the portal configuration, tagged `platform=grantmaestro`. The webhook's `customer.subscription.updated` event applies changes made in Stripe.
 - The Stripe account is shared with other products, so the webhook only acts on objects whose metadata has `platform=grantmaestro`.
 
 When Stripe is not enabled, checkout falls back to Pin Payments. Its keys are set in Payment Settings → Pin Payments.
